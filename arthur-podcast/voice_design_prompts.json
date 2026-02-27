@@ -1,0 +1,36 @@
+{
+  "_instructions": [
+    "Use these prompts with ElevenLabs Voice Design (no audio samples needed).",
+    "Go to: https://elevenlabs.io/app/voice-lab → Add a new voice → Voice Design",
+    "Paste the 'prompt' text, set preview text to the 'preview_line', click Generate.",
+    "ElevenLabs will generate 3 candidates — pick the best one, save it, copy the voice ID.",
+    "Paste each voice ID into characters.json.",
+    "",
+    "Alternatively use Voice Cloning (higher quality) — see prepare_voices.py for that workflow."
+  ],
+
+  "ARTHUR": {
+    "prompt": "An eight-year-old American boy with a warm, slightly earnest voice. Friendly and curious tone, with just a hint of a nasal quality typical of children that age. Energetic but not over-the-top. Clear diction, moderate pace, sounds like a real kid rather than a cartoon caricature. Perfect audio quality, studio recorded.",
+    "preview_line": "Hey, has anyone seen my library book? I left it right here and now it's gone."
+  },
+
+  "DW": {
+    "prompt": "A four-year-old American girl with a bright, precocious, and slightly bossy voice. Higher pitch than Arthur, dramatic and self-assured. She speaks with the confidence of someone who is absolutely certain she is right about everything. Clear and expressive, with natural childlike inflections. Perfect audio quality, studio recorded.",
+    "preview_line": "I TOLD you there was a monster in the basement. Nobody ever listens to me."
+  },
+
+  "TIMMY": {
+    "prompt": "A four-year-old American boy, one of a pair of energetic twins. High-pitched, excitable, slightly impish voice. Enthusiastic and easily wound up. He speaks quickly when excited. Sounds very young, playful, and a little mischievous. Perfect audio quality, studio recorded.",
+    "preview_line": "Did you say monster? I brought a flashlight! Let's go find it right now!"
+  },
+
+  "TOMMY": {
+    "prompt": "A four-year-old American boy, twin brother, very similar to Timmy but with a marginally lower pitch and slightly more deadpan delivery. Still excitable but a touch calmer, often echoing or finishing his brother's thoughts. Playful and impish. Perfect audio quality, studio recorded.",
+    "preview_line": "I wasn't scared at all. That was just a practice scream to see if my lungs still worked."
+  },
+
+  "NARRATOR": {
+    "prompt": "A warm, friendly adult American male with a rich, clear storytelling voice. Think PBS Kids narrator — inviting, measured pace, gentle authority, slightly theatrical without being over-the-top. The kind of voice that makes children want to lean in and listen. Calm, articulate, and reassuring. Perfect audio quality, studio recorded.",
+    "preview_line": "It was a perfectly ordinary Tuesday morning in Elwood City — which meant, of course, that something extraordinary was about to happen."
+  }
+}
