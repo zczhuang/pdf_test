@@ -1,0 +1,7 @@
+{
+  "elevenlabs_api_key": "your_key_here",
+  "music_volume_db": -18,
+  "sfx_volume_db": -10,
+  "pause_between_lines_ms": 400,
+  "output_format": "mp3"
+}

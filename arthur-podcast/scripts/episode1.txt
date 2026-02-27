@@ -1,0 +1,49 @@
+# Episode 1: The Missing Library Book
+# Script format:
+#   CHARACTER NAME: dialogue
+#   [SFX: filename]
+#   [MUSIC: filename]
+#   [MUSIC: fade_out]
+#   [PAUSE: seconds]
+
+[MUSIC: theme_song]
+[PAUSE: 3]
+NARRATOR: Welcome to Arthur and Friends! Today's episode: The Missing Library Book.
+[PAUSE: 1]
+NARRATOR: It was a bright Monday morning in Elwood City, and Arthur Read had a big problem.
+[SFX: alarm_clock]
+[PAUSE: 0.5]
+ARTHUR: Oh no! My library book is due today and I can't find it anywhere!
+DW: Maybe you left it in the bathtub again. Like last time.
+ARTHUR: I did not leave it in the bathtub. I would never do that.
+DW: You absolutely did. Mom had to dry it out on the radiator for three days.
+[PAUSE: 0.5]
+NARRATOR: Arthur searched his entire room from top to bottom.
+[SFX: rummaging]
+ARTHUR: It's not under my bed. It's not in my backpack. It's not on my shelf.
+[PAUSE: 0.5]
+DW: Did you check behind the couch cushions? That's where all the important stuff lives.
+ARTHUR: That is... actually a good idea. Don't tell anyone I said that.
+[SFX: couch_cushions]
+[PAUSE: 0.5]
+ARTHUR: Found it! It was wedged behind the left cushion. Under a granola bar. From November.
+DW: You're welcome.
+[PAUSE: 1]
+NARRATOR: Arthur grabbed his book and his backpack and ran to meet his friends.
+[SFX: door_slam]
+[MUSIC: walking_theme]
+[PAUSE: 0.5]
+TIMMY: Arthur! We were waiting for you. We're going to be late!
+TOMMY: He's always late. That's just Arthur's whole thing.
+ARTHUR: I'm not always late. I just — had a small book emergency. It's fine now.
+TIMMY: A book emergency?
+ARTHUR: The less you know, the better.
+[PAUSE: 0.5]
+NARRATOR: The three friends hurried down the sidewalk toward Lakewood Elementary, and for once, they made it just in time.
+[MUSIC: fade_out]
+[PAUSE: 1]
+NARRATOR: And that is today's lesson, friends: always return your library books on time. Or at least check the couch cushions.
+[PAUSE: 1]
+NARRATOR: See you next time on Arthur and Friends!
+[SFX: closing_jingle]
+[PAUSE: 2]
