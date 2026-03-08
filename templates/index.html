@@ -185,9 +185,11 @@
 
     .hero-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
-      gap: 22px;
-      align-items: end;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .hero-copy {
+      max-width: 780px;
     }
 
     .eyebrow {
@@ -244,53 +246,6 @@
       color: var(--muted);
       font-size: 0.88rem;
       font-weight: 600;
-    }
-
-    .hero-card {
-      padding: 20px;
-      border-radius: var(--radius-lg);
-      background:
-        linear-gradient(160deg, rgba(49,70,201,0.92) 0%, rgba(61,85,215,0.95) 56%, rgba(221,123,87,0.86) 100%);
-      color: #f8fbff;
-      box-shadow: var(--shadow-soft);
-    }
-
-    .hero-card h3 {
-      font-size: 1.05rem;
-      margin-bottom: 10px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-    }
-
-    .hero-card p {
-      line-height: 1.65;
-      font-size: 0.94rem;
-      color: rgba(248,251,255,0.88);
-    }
-
-    .hero-card ul {
-      list-style: none;
-      display: grid;
-      gap: 10px;
-      margin-top: 16px;
-    }
-
-    .hero-card li {
-      position: relative;
-      padding-left: 18px;
-      font-size: 0.92rem;
-      line-height: 1.55;
-    }
-
-    .hero-card li::before {
-      content: "";
-      position: absolute;
-      left: 0;
-      top: 0.6em;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.9);
     }
 
     .app-grid {
@@ -860,18 +815,6 @@
         </div>
       </div>
 
-      <div class="hero-card">
-        <h3>How it flows</h3>
-        <p>
-          Capture the day while it is still close, then let the app organize it
-          into something you can revisit with context.
-        </p>
-        <ul>
-          <li>Record first, edit second.</li>
-          <li>Attach the media that belongs with the moment.</li>
-          <li>Use the weekly summary when you want the broader thread.</li>
-        </ul>
-      </div>
     </div>
   </header>
 
