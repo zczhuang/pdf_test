@@ -1,0 +1,38 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="18" y1="10" x2="108" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6777FF"/>
+      <stop offset="1" stop-color="#3146C9"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(45 25) rotate(38.7) scale(58.2 54.9)">
+      <stop stop-color="#AAB6FF" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#AAB6FF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="17" y="25" width="94" height="76" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="4"/>
+      <feGaussianBlur stdDeviation="4"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.122 0 0 0 0 0.191 0 0 0 0 0.548 0 0 0 0.18 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_2"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_2" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect width="128" height="128" rx="30" fill="url(#bg)"/>
+  <rect width="128" height="128" rx="30" fill="url(#glow)"/>
+
+  <circle cx="87" cy="34" r="15" fill="#E97C5A"/>
+  <path d="M61 19L64 25L70 28L64 31L61 37L58 31L52 28L58 25L61 19Z" fill="#F4C56C"/>
+
+  <g filter="url(#shadow)">
+    <path d="M31 37C41 31 52 31 64 39V92C53 84 42 84 31 89V37Z" fill="#F7F1E8"/>
+    <path d="M97 37C87 31 76 31 64 39V92C75 84 86 84 97 89V37Z" fill="#FBF7F1"/>
+    <path d="M64 39V92" stroke="#D9E0FF" stroke-width="4" stroke-linecap="round"/>
+    <path d="M40 51H54" stroke="#CCD6FF" stroke-width="4" stroke-linecap="round"/>
+    <path d="M40 62H54" stroke="#CCD6FF" stroke-width="4" stroke-linecap="round"/>
+    <path d="M74 51H88" stroke="#CCD6FF" stroke-width="4" stroke-linecap="round"/>
+    <path d="M74 62H88" stroke="#CCD6FF" stroke-width="4" stroke-linecap="round"/>
+    <path d="M33 88C43 82 53 82 64 89C75 82 85 82 95 88" stroke="#F4C56C" stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>

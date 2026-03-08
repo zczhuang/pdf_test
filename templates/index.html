@@ -4,9 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#5b6af0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="JournalPal" />
+  <meta name="theme-color" content="#4455e0" />
   <link rel="manifest" href="/static/manifest.json" />
-  <title>Journal</title>
+  <link rel="icon" href="/static/logo-mark.svg" type="image/svg+xml" />
+  <link rel="icon" href="/static/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+  <title>JournalPal</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -16,12 +21,14 @@
       --border:   #e2ddd6;
       --text:     #2d2926;
       --muted:    #7a746c;
-      --accent:   #5b6af0;
-      --accent-h: #4455e0;
+      --accent:   #4455e0;
+      --accent-h: #3146c9;
       --danger:   #d93025;
       --rec:      #ea4335;
       --tag-bg:   #eef0fb;
       --tag-text: #4455e0;
+      --warm:     #e97c5a;
+      --gold:     #f4c56c;
     }
 
     body {
@@ -41,8 +48,40 @@
       text-align: center;
       margin-bottom: 32px;
     }
-    header h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.5px; }
-    header p  { color: var(--muted); margin-top: 4px; font-size: 0.95rem; }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+    .brand-mark {
+      width: 58px;
+      height: 58px;
+      border-radius: 16px;
+      box-shadow: 0 12px 28px rgba(68,85,224,.22);
+      flex: 0 0 auto;
+    }
+    .brand-copy {
+      text-align: left;
+    }
+    .brand-copy h1 {
+      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.8px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .brand-copy h1 span {
+      color: var(--accent);
+    }
+    .brand-copy div {
+      color: var(--muted);
+      font-size: 0.88rem;
+      letter-spacing: .02em;
+    }
+    header p  { color: var(--muted); margin-top: 6px; font-size: 0.95rem; }
 
     .card {
       background: var(--surface);
@@ -334,7 +373,13 @@
 <body>
 
 <header>
-  <h1>JournalPal</h1>
+  <div class="brand">
+    <img class="brand-mark" src="/static/logo-mark.svg" alt="" />
+    <div class="brand-copy">
+      <h1>Journal<span>Pal</span></h1>
+      <div>voice, notes, and media that stay with you</div>
+    </div>
+  </div>
   <p id="dateDisplay"></p>
 </header>
 

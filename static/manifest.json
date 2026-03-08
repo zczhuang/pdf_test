@@ -1,11 +1,12 @@
 {
-  "name": "Evening Journal",
-  "short_name": "Journal",
-  "description": "Daily reflections across Work, Life, and Faith",
+  "name": "JournalPal",
+  "short_name": "JournalPal",
+  "description": "Voice-first journaling with notes, media, and weekly summaries.",
+  "id": "/",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8f6f2",
-  "theme_color": "#5b6af0",
+  "theme_color": "#4455e0",
   "orientation": "portrait",
   "icons": [
     {

@@ -3,7 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Journal Gallery</title>
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="JournalPal" />
+  <meta name="theme-color" content="#4455e0" />
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="icon" href="/static/logo-mark.svg" type="image/svg+xml" />
+  <link rel="icon" href="/static/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+  <title>JournalPal Gallery</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -13,8 +21,8 @@
       --border: #e2ddd6;
       --text: #2d2926;
       --muted: #7a746c;
-      --accent: #5b6af0;
-      --accent-h: #4455e0;
+      --accent: #4455e0;
+      --accent-h: #3146c9;
       --tag-bg: #eef0fb;
       --tag-text: #4455e0;
       --shadow: 0 2px 12px rgba(0,0,0,.06);
@@ -38,6 +46,40 @@
       margin-bottom: 24px;
     }
 
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .brand-mark {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      box-shadow: 0 12px 28px rgba(68,85,224,.22);
+      flex: 0 0 auto;
+    }
+
+    .brand-copy h1 {
+      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      font-size: 1.95rem;
+      font-weight: 700;
+      letter-spacing: -0.8px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .brand-copy h1 span {
+      color: var(--accent);
+    }
+
+    .brand-copy div {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+
     .back-link {
       display: inline-block;
       color: var(--accent);
@@ -46,7 +88,7 @@
       margin-bottom: 12px;
     }
 
-    h1 {
+    .page-title {
       font-size: 1.9rem;
       letter-spacing: -0.6px;
       margin-bottom: 6px;
@@ -271,7 +313,14 @@
   <div class="shell">
     <header>
       <a class="back-link" href="/">Back to journal</a>
-      <h1>Journal Gallery</h1>
+      <div class="brand">
+        <img class="brand-mark" src="/static/logo-mark.svg" alt="" />
+        <div class="brand-copy">
+          <h1>Journal<span>Pal</span></h1>
+          <div>voice, notes, and media that stay with you</div>
+        </div>
+      </div>
+      <div class="page-title">Gallery</div>
       <p>Browse reflections and attached media by date.</p>
     </header>
 
