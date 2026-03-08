@@ -189,19 +189,17 @@ def save_entry():
     # Upload photo/video to Drive if provided
     media_file = request.files.get("media") or request.files.get("image")
     if media_file:
-        media_bytes = media_file.read()
-        if media_bytes:
-            try:
-                from services.drive_service import upload_media
+        try:
+            from services.drive_service import upload_media_stream
 
-                link = upload_media(
-                    f"{date}-{media_file.filename}",
-                    media_bytes,
-                    media_file.content_type or "application/octet-stream",
-                )
-                media_links.append({"label": media_file.filename, "url": link["url"]})
-            except Exception:
-                app.logger.exception("Media upload failed — skipping")
+            link = upload_media_stream(
+                f"{date}-{media_file.filename}",
+                media_file.stream,
+                media_file.content_type or "application/octet-stream",
+            )
+            media_links.append({"label": media_file.filename, "url": link["url"]})
+        except Exception:
+            app.logger.exception("Media upload failed — skipping")
 
     # Import Google Photos selections into Drive media storage
     for item in google_photos_items[:20]:
@@ -272,7 +270,13 @@ def summarize():
         summary_md = generate_weekly_summary(entries, week_label)
         drive_url = write_summary(week_iso, summary_md)
 
-        return jsonify({"success": True, "drive_url": drive_url, "entries_count": len(entries)})
+        return jsonify({
+            "success": True,
+            "drive_url": drive_url,
+            "entries_count": len(entries),
+            "summary_markdown": summary_md,
+            "week_label": week_label,
+        })
     except Exception as e:
         app.logger.exception("Summary generation failed")
         return jsonify({"error": str(e)}), 500

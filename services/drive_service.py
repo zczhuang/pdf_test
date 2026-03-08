@@ -14,14 +14,14 @@ you and count against your 15 GB quota. Set env vars:
 """
 
 import io
-import json
 import os
 from datetime import datetime
+from typing import BinaryIO
 
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaInMemoryUpload, MediaIoBaseDownload
+from googleapiclient.http import MediaInMemoryUpload, MediaIoBaseDownload, MediaIoBaseUpload
 
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
@@ -182,6 +182,35 @@ def upload_media(filename: str, data: bytes, mime_type: str) -> dict:
     }
 
 
+def upload_media_stream(filename: str, file_obj: BinaryIO, mime_type: str) -> dict:
+    """
+    Upload a media file from a file-like object using Drive resumable upload.
+
+    This avoids buffering larger videos fully in application memory before the
+    Drive upload starts.
+    """
+    service = _get_service()
+    media_folder = _get_media_folder(service)
+
+    try:
+        file_obj.seek(0)
+    except (AttributeError, OSError):
+        pass
+
+    file_id = _create_file_from_stream(
+        service,
+        filename,
+        file_obj,
+        mime_type,
+        media_folder,
+    )
+    return {
+        "label": filename,
+        "url": f"https://drive.google.com/file/d/{file_id}/view",
+        "file_id": file_id,
+    }
+
+
 def write_summary(week_label: str, content: str) -> str:
     """Write a weekly summary Markdown file to Drive. Returns Drive URL."""
     service = _get_service()
@@ -241,6 +270,28 @@ def _create_file(
     media = MediaInMemoryUpload(data, mimetype=mime_type)
     f = service.files().create(body=metadata, media_body=media, fields="id", supportsAllDrives=True).execute()
     return f["id"]
+
+
+def _create_file_from_stream(
+    service,
+    name: str,
+    file_obj: BinaryIO,
+    mime_type: str,
+    parent_id: str,
+) -> str:
+    metadata = {"name": name, "parents": [parent_id]}
+    media = MediaIoBaseUpload(file_obj, mimetype=mime_type, resumable=True)
+    request = service.files().create(
+        body=metadata,
+        media_body=media,
+        fields="id",
+        supportsAllDrives=True,
+    )
+
+    response = None
+    while response is None:
+        _, response = request.next_chunk()
+    return response["id"]
 
 
 def _update_file(service, file_id: str, data: bytes) -> None:

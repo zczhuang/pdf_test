@@ -219,6 +219,7 @@
     #googlePhotosStatus { font-size: 0.82rem; color: var(--muted); min-height: 18px; }
 
     .hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 14px; }
+    #mediaHint { margin-top: 6px; }
 
     /* Tags display */
     .tags-display {
@@ -293,6 +294,33 @@
     }
     #summaryBtn:hover { border-color: var(--accent); color: var(--accent); }
     #summaryBtn:disabled { opacity: .5; cursor: default; }
+
+    .summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px;
+      width: 100%;
+      max-width: 640px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      margin-top: 18px;
+      display: none;
+    }
+    .summary-card.visible { display: block; }
+    .summary-card h2 {
+      font-size: 1.1rem;
+      margin-bottom: 10px;
+    }
+    .summary-meta {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+    }
+    .summary-content {
+      white-space: pre-wrap;
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
   </style>
 </head>
 <body>
@@ -356,6 +384,7 @@
       <input type="file" id="mediaInput" accept="image/*,video/*" />
       <img id="imagePreview" alt="preview" />
       <video id="videoPreview" controls playsinline></video>
+      <p class="hint" id="mediaHint">For longer videos, Google Photos selection or links are more reliable than direct upload.</p>
     </div>
   </div>
 
@@ -366,6 +395,12 @@
 <!-- Weekly summary trigger -->
 <div class="summary-row">
   <button id="summaryBtn">Generate this week's summary</button>
+</div>
+
+<div class="summary-card" id="summaryCard">
+  <h2 id="summaryTitle">Weekly Summary</h2>
+  <div class="summary-meta" id="summaryMeta"></div>
+  <div class="summary-content" id="summaryContent"></div>
 </div>
 
 <div id="toast"></div>
@@ -547,6 +582,13 @@
       imagePreview.src = objectUrl;
       imagePreview.style.display = "block";
     }
+
+    const mediaHint = document.getElementById("mediaHint");
+    if (file.type.startsWith("video/") && file.size > 20 * 1024 * 1024) {
+      mediaHint.textContent = "This video is fairly large. If save fails, use Google Photos or paste a link instead of direct upload.";
+    } else {
+      mediaHint.textContent = "For longer videos, Google Photos selection or links are more reliable than direct upload.";
+    }
   });
 
   // Voice recorder
@@ -717,6 +759,7 @@
       });
       const data = await res.json();
       if (data.success) {
+        renderSummary(data.summary_markdown, data.week_label, data.drive_url);
         showToast(
           `Weekly summary saved to Drive! (${data.entries_count} entries)`,
           "success"
@@ -738,6 +781,21 @@
     t.textContent = msg;
     t.className = "show " + type;
     setTimeout(() => { t.className = ""; }, 4000);
+  }
+
+  function renderSummary(markdown, weekLabel, driveUrl) {
+    const card = document.getElementById("summaryCard");
+    const title = document.getElementById("summaryTitle");
+    const meta = document.getElementById("summaryMeta");
+    const content = document.getElementById("summaryContent");
+
+    title.textContent = weekLabel || "Weekly Summary";
+    meta.innerHTML = driveUrl
+      ? `Saved to <a href="${driveUrl}" target="_blank" rel="noopener noreferrer">Google Drive</a>`
+      : "";
+    content.textContent = markdown || "";
+    card.classList.add("visible");
+    card.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 </script>
 </body>
