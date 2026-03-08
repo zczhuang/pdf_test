@@ -1360,8 +1360,16 @@
       });
       const data = await res.json();
       if (data.success) {
-        renderSummary(data.summary_markdown, data.week_label, data.drive_url);
-        showToast(`Weekly summary saved to Drive. (${data.entries_count} entries)`, "success");
+        renderSummary(
+          data.summary_markdown,
+          data.week_label,
+          data.drive_url,
+          data.summary_source
+        );
+        const summaryMessage = data.summary_source === "existing"
+          ? `Loaded saved weekly summary. (${data.entries_count} entries)`
+          : `Weekly summary saved to Drive. (${data.entries_count} entries)`;
+        showToast(summaryMessage, "success");
       } else {
         showToast("Error: " + (data.error || "Unknown error"), "error");
       }
@@ -1380,15 +1388,16 @@
     setTimeout(() => { toast.className = ""; }, 4000);
   }
 
-  function renderSummary(markdown, weekLabel, driveUrl) {
+  function renderSummary(markdown, weekLabel, driveUrl, source) {
     const card = document.getElementById("summaryCard");
     const title = document.getElementById("summaryTitle");
     const meta = document.getElementById("summaryMeta");
     const content = document.getElementById("summaryContent");
 
     title.textContent = weekLabel || "Weekly summary";
+    const statusLabel = source === "existing" ? "Loaded from" : "Saved to";
     meta.innerHTML = driveUrl
-      ? `Saved to <a href="${driveUrl}" target="_blank" rel="noopener noreferrer">Google Drive</a>`
+      ? `${statusLabel} <a href="${driveUrl}" target="_blank" rel="noopener noreferrer">Google Drive</a>`
       : "";
     content.textContent = markdown || "";
     card.classList.add("visible");

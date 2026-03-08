@@ -13,11 +13,13 @@ you and count against your 15 GB quota. Set env vars:
   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
 """
 
+import hashlib
 import io
+import json
 import os
 import re
 from datetime import datetime
-from typing import BinaryIO
+from typing import Any, BinaryIO
 from urllib.parse import parse_qs, urlparse
 
 from google.oauth2.credentials import Credentials
@@ -31,12 +33,19 @@ SUBFOLDER_ENTRIES = "entries"
 SUBFOLDER_MEDIA = "media"
 SUBFOLDER_SUMMARIES = "summaries"
 SUBFOLDER_WEEKLY = "weekly"
+SUBFOLDER_MONTHLY = "monthly"
+SUBFOLDER_YTD = "ytd"
+SUBFOLDER_HIGHLIGHTS = "highlights"
 
 _folder_id_cache: dict[str, str] = {}
 
 _ENTRY_HEADER_RE = re.compile(r"^# Journal [—-] (?P<date>\d{4}-\d{2}-\d{2})$", re.MULTILINE)
 _MARKDOWN_LINK_RE = re.compile(r"^- \[(?P<label>.+?)\]\((?P<url>https?://[^\s)]+)\)$")
 _LABEL_URL_RE = re.compile(r"^- (?P<label>.+): (?P<url>https?://\S+)$")
+_SUMMARY_META_RE = re.compile(
+    r"^<!--\s*summary-meta:\s*(?P<meta>\{.*?\})\s*-->\s*",
+    re.DOTALL,
+)
 
 _IMAGE_EXTENSIONS = {".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp", ".heic"}
 _VIDEO_EXTENSIONS = {".m4v", ".mov", ".mp4", ".mpeg", ".mpg", ".webm"}
@@ -113,6 +122,29 @@ def _get_weekly_summaries_folder(service) -> str:
     root = os.environ["DRIVE_FOLDER_ID"]
     summaries_id = _find_or_create_folder(service, SUBFOLDER_SUMMARIES, root)
     return _find_or_create_folder(service, SUBFOLDER_WEEKLY, summaries_id)
+
+
+def _get_summaries_root_folder(service) -> str:
+    root = os.environ["DRIVE_FOLDER_ID"]
+    return _find_or_create_folder(service, SUBFOLDER_SUMMARIES, root)
+
+
+def _get_summary_folder(service, summary_kind: str, period: str) -> str:
+    summaries_root = _get_summaries_root_folder(service)
+
+    if summary_kind == "weekly_recap" and period == "week":
+        return _find_or_create_folder(service, SUBFOLDER_WEEKLY, summaries_root)
+
+    if summary_kind == "period_review":
+        highlights_root = _find_or_create_folder(service, SUBFOLDER_HIGHLIGHTS, summaries_root)
+        if period == "week":
+            return _find_or_create_folder(service, SUBFOLDER_WEEKLY, highlights_root)
+        if period == "month":
+            return _find_or_create_folder(service, SUBFOLDER_MONTHLY, highlights_root)
+        if period == "ytd":
+            return _find_or_create_folder(service, SUBFOLDER_YTD, highlights_root)
+
+    raise ValueError(f"Unsupported summary kind/period: {summary_kind}/{period}")
 
 
 def write_entry(
@@ -221,20 +253,143 @@ def upload_media_stream(filename: str, file_obj: BinaryIO, mime_type: str) -> di
     }
 
 
-def write_summary(week_label: str, content: str) -> str:
-    """Write a weekly summary Markdown file to Drive. Returns Drive URL."""
+def get_summary(summary_kind: str, period: str, period_key: str) -> dict[str, Any] | None:
+    """Return saved summary content and metadata for a given summary kind and period key."""
     service = _get_service()
-    folder = _get_weekly_summaries_folder(service)
-    filename = f"{week_label}.md"
+    folder = _get_summary_folder(service, summary_kind, period)
+    filename = f"{period_key}.md"
+    existing = _find_file(service, filename, folder)
+
+    if not existing:
+        return None
+
+    raw = _download_file(service, existing["id"])
+    metadata, content = _parse_summary_document(raw)
+    return {
+        "file_id": existing["id"],
+        "drive_url": _drive_file_url(existing["id"]),
+        "modified_time": existing.get("modifiedTime"),
+        "metadata": metadata,
+        "content": content,
+    }
+
+
+def write_summary(
+    summary_kind: str,
+    period: str,
+    period_key: str,
+    content: str,
+    metadata: dict[str, Any],
+) -> str:
+    """Write a cached summary Markdown file to Drive. Returns Drive URL."""
+    service = _get_service()
+    folder = _get_summary_folder(service, summary_kind, period)
+    filename = f"{period_key}.md"
+    payload = _serialize_summary_document(content, metadata).encode()
 
     existing = _find_file(service, filename, folder)
     if existing:
-        _update_file(service, existing["id"], content.encode())
+        _update_file(service, existing["id"], payload)
         file_id = existing["id"]
     else:
-        file_id = _create_file(service, filename, content.encode(), "text/markdown", folder)
+        file_id = _create_file(service, filename, payload, "text/markdown", folder)
 
-    return f"https://drive.google.com/file/d/{file_id}/view"
+    return _drive_file_url(file_id)
+
+
+def get_entry_snapshot(
+    start_date: str,
+    end_date: str | None = None,
+    *,
+    include_content: bool = False,
+) -> dict[str, Any]:
+    """
+    Return entry metadata for a period, and optionally full entry content.
+
+    The snapshot fingerprint is based on Drive file id + date + modifiedTime so
+    appends and edits invalidate cached summaries without downloading content.
+    """
+    if end_date and end_date < start_date:
+        return {
+            "entries": [],
+            "entry_count": 0,
+            "entry_fingerprint": _fingerprint_parts([]),
+            "latest_entry_modified": None,
+        }
+
+    service = _get_service()
+    files = _list_entry_files(service, order_by="name")
+
+    entries: list[dict[str, Any]] = []
+    fingerprint_parts: list[str] = []
+    latest_entry_modified: str | None = None
+
+    for file_info in files:
+        date_str = file_info["name"].replace(".md", "")
+        if date_str < start_date:
+            continue
+        if end_date and date_str > end_date:
+            continue
+
+        modified_time = file_info.get("modifiedTime") or ""
+        fingerprint_parts.append(f"{file_info['id']}|{date_str}|{modified_time}")
+        latest_entry_modified = _max_timestamp(latest_entry_modified, modified_time)
+
+        if include_content:
+            raw = _download_file(service, file_info["id"])
+            entries.append(
+                {
+                    "date": date_str,
+                    "content": raw,
+                    "tags": _extract_tags(raw),
+                }
+            )
+
+    return {
+        "entries": entries,
+        "entry_count": len(fingerprint_parts),
+        "entry_fingerprint": _fingerprint_parts(fingerprint_parts),
+        "latest_entry_modified": latest_entry_modified,
+    }
+
+
+def is_summary_fresh(
+    summary: dict[str, Any] | None,
+    *,
+    summary_kind: str,
+    period: str,
+    period_key: str,
+    start_date: str,
+    end_date: str,
+    entry_count: int,
+    entry_fingerprint: str,
+    latest_entry_modified: str | None,
+) -> bool:
+    """Return True when a saved summary can be reused safely."""
+    if not summary:
+        return False
+
+    metadata = summary.get("metadata") or {}
+    if metadata:
+        return (
+            metadata.get("summary_kind") == summary_kind
+            and metadata.get("period") == period
+            and metadata.get("period_key") == period_key
+            and metadata.get("start_date") == start_date
+            and metadata.get("end_date") == end_date
+            and metadata.get("entry_count") == entry_count
+            and metadata.get("entry_fingerprint") == entry_fingerprint
+        )
+
+    if summary_kind == "weekly_recap" and period == "week":
+        if latest_entry_modified is None:
+            return True
+        summary_modified = summary.get("modified_time")
+        if not summary_modified:
+            return False
+        return _parse_drive_timestamp(summary_modified) >= _parse_drive_timestamp(latest_entry_modified)
+
+    return False
 
 
 def list_entry_dates(limit: int | None = None) -> list[dict]:
@@ -338,7 +493,7 @@ def _list_entry_files(service, order_by: str) -> list[dict]:
         service.files()
         .list(
             q=query,
-            fields="files(id, name)",
+            fields="files(id, name, modifiedTime)",
             orderBy=order_by,
             supportsAllDrives=True,
             includeItemsFromAllDrives=True,
@@ -350,7 +505,12 @@ def _list_entry_files(service, order_by: str) -> list[dict]:
 
 def _find_file(service, name: str, parent_id: str) -> dict | None:
     query = f"name = '{name}' and '{parent_id}' in parents and trashed = false"
-    results = service.files().list(q=query, fields="files(id, name)", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
+    results = service.files().list(
+        q=query,
+        fields="files(id, name, modifiedTime)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+    ).execute()
     files = results.get("files", [])
     return files[0] if files else None
 
@@ -408,6 +568,41 @@ def _extract_tags(content: str) -> list[str]:
             raw = line.replace("**Tags:**", "").strip()
             return [t.strip() for t in raw.split(",") if t.strip()]
     return []
+
+
+def _serialize_summary_document(content: str, metadata: dict[str, Any]) -> str:
+    meta_json = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
+    return f"<!-- summary-meta: {meta_json} -->\n\n{content.strip()}\n"
+
+
+def _parse_summary_document(content: str) -> tuple[dict[str, Any] | None, str]:
+    match = _SUMMARY_META_RE.match(content)
+    if not match:
+        return None, content.strip()
+
+    try:
+        metadata = json.loads(match.group("meta"))
+    except json.JSONDecodeError:
+        return None, content.strip()
+
+    return metadata, content[match.end():].strip()
+
+
+def _fingerprint_parts(parts: list[str]) -> str:
+    joined = "\n".join(parts)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def _parse_drive_timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _max_timestamp(current: str | None, candidate: str | None) -> str | None:
+    if not candidate:
+        return current
+    if not current:
+        return candidate
+    return candidate if _parse_drive_timestamp(candidate) > _parse_drive_timestamp(current) else current
 
 
 def _is_iso_date(value: str) -> bool:

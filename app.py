@@ -5,7 +5,7 @@ Routes:
   GET  /              → serve the journal UI
   POST /transcribe    → transcribe voice audio, return text
   POST /entry         → save a journal entry to Google Drive (auto-tagged by LLM)
-  POST /summarize     → generate weekly summary via Claude
+  POST /summarize     → load or generate a weekly summary via Gemini
   GET  /health        → health check for Cloud Run
 """
 
@@ -20,6 +20,9 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
+
+SUMMARY_KIND_WEEKLY_RECAP = "weekly_recap"
+SUMMARY_KIND_PERIOD_REVIEW = "period_review"
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -41,8 +44,7 @@ def _current_week_label() -> str:
 
 
 def _current_week_iso() -> str:
-    now = datetime.now(timezone.utc)
-    return now.strftime("%G-W%V")
+    return _iso_week_key(_today_date())
 
 
 def _week_start_date() -> str:
@@ -61,6 +63,11 @@ def _week_label_for(anchor_date: date) -> str:
     return f"Week of {_week_start_for(anchor_date).strftime('%B %-d, %Y')}"
 
 
+def _iso_week_key(anchor_date: date) -> str:
+    iso_year, iso_week, _ = anchor_date.isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
+
+
 def _month_end_for(anchor_date: date) -> date:
     if anchor_date.month == 12:
         return date(anchor_date.year, 12, 31)
@@ -74,22 +81,122 @@ def _period_window(period: str, anchor_date: date) -> dict:
         start = _week_start_for(anchor_date)
         end = min(_week_end_for(anchor_date), today)
         label = _week_label_for(anchor_date)
+        period_key = _iso_week_key(anchor_date)
     elif period == "month":
         start = anchor_date.replace(day=1)
         end = min(_month_end_for(anchor_date), today)
         label = anchor_date.strftime("%B %Y")
+        period_key = anchor_date.strftime("%Y-%m")
     elif period == "ytd":
         start = anchor_date.replace(month=1, day=1)
         end = min(anchor_date, today)
         label = f"Year to date through {anchor_date.strftime('%B %-d, %Y')}"
+        period_key = f"{anchor_date.year}-through-{end.isoformat()}"
     else:
         raise ValueError("Unsupported summary period")
 
     return {
         "period": period,
+        "period_key": period_key,
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
         "label": label,
+    }
+
+
+def _summary_metadata(
+    *,
+    summary_kind: str,
+    period: str,
+    period_key: str,
+    label: str,
+    start_date: str,
+    end_date: str,
+    entry_count: int,
+    entry_fingerprint: str,
+    model: str,
+) -> dict:
+    return {
+        "summary_kind": summary_kind,
+        "period": period,
+        "period_key": period_key,
+        "label": label,
+        "start_date": start_date,
+        "end_date": end_date,
+        "entry_count": entry_count,
+        "entry_fingerprint": entry_fingerprint,
+        "model": model,
+    }
+
+
+def _resolve_summary(
+    *,
+    summary_kind: str,
+    period: str,
+    period_key: str,
+    label: str,
+    start_date: str,
+    end_date: str,
+    generator,
+) -> dict:
+    from services.drive_service import (
+        get_entry_snapshot,
+        get_summary,
+        is_summary_fresh,
+        write_summary,
+    )
+    from services.llm_service import get_summary_model
+
+    snapshot = get_entry_snapshot(start_date, end_date, include_content=False)
+    saved_summary = get_summary(summary_kind, period, period_key)
+    model = get_summary_model()
+
+    if is_summary_fresh(
+        saved_summary,
+        summary_kind=summary_kind,
+        period=period,
+        period_key=period_key,
+        start_date=start_date,
+        end_date=end_date,
+        entry_count=snapshot["entry_count"],
+        entry_fingerprint=snapshot["entry_fingerprint"],
+        latest_entry_modified=snapshot["latest_entry_modified"],
+    ):
+        return {
+            "summary_markdown": saved_summary["content"],
+            "drive_url": saved_summary["drive_url"],
+            "entries_count": snapshot["entry_count"],
+            "summary_source": "existing",
+            "summary_period_key": period_key,
+            "model": saved_summary.get("metadata", {}).get("model") or model,
+        }
+
+    entries = []
+    if snapshot["entry_count"] > 0:
+        snapshot = get_entry_snapshot(start_date, end_date, include_content=True)
+        entries = snapshot["entries"]
+
+    summary_markdown = generator(entries, label)
+    metadata = _summary_metadata(
+        summary_kind=summary_kind,
+        period=period,
+        period_key=period_key,
+        label=label,
+        start_date=start_date,
+        end_date=end_date,
+        entry_count=snapshot["entry_count"],
+        entry_fingerprint=snapshot["entry_fingerprint"],
+        model=model,
+    )
+    drive_url = write_summary(summary_kind, period, period_key, summary_markdown, metadata)
+
+    return {
+        "summary_markdown": summary_markdown,
+        "drive_url": drive_url,
+        "entries_count": snapshot["entry_count"],
+        "summary_source": "generated",
+        "summary_period_key": period_key,
+        "model": model,
     }
 
 
@@ -156,14 +263,17 @@ def gallery_summary():
         return jsonify({"error": "Invalid summary period or date"}), 400
 
     try:
-        from services.claude_service import generate_period_summary
-        from services.drive_service import list_entries_between
+        from services.llm_service import generate_period_summary
 
-        entries = list_entries_between(
+        result = _resolve_summary(
+            summary_kind=SUMMARY_KIND_PERIOD_REVIEW,
+            period=period,
+            period_key=window["period_key"],
+            label=window["label"],
             start_date=window["start_date"],
             end_date=window["end_date"],
+            generator=lambda entries, label: generate_period_summary(entries, label, period),
         )
-        summary_md = generate_period_summary(entries, window["label"], period)
 
         return jsonify(
             {
@@ -173,8 +283,7 @@ def gallery_summary():
                 "label": window["label"],
                 "start_date": window["start_date"],
                 "end_date": window["end_date"],
-                "entries_count": len(entries),
-                "summary_markdown": summary_md,
+                **result,
             }
         )
     except Exception as e:
@@ -352,10 +461,10 @@ def save_entry():
                 app.logger.exception("YouTube enrichment failed — using raw URL")
         enriched_urls.append({"label": label, "url": url})
 
-    # Auto-tag the entry with Claude
+    # Auto-tag the entry with Gemini
     tags: list[str] = []
     try:
-        from services.claude_service import tag_entry
+        from services.llm_service import tag_entry
         tags = tag_entry(text)
     except Exception:
         app.logger.exception("Auto-tagging failed — saving without tags")
@@ -379,26 +488,32 @@ def save_entry():
 @app.post("/summarize")
 def summarize():
     """
-    Generate a weekly summary for the current week.
+    Load or generate a weekly summary for the current week.
     """
     body = request.get_json(silent=True) or {}
     since_date = body.get("week_start") or _week_start_date()
-    week_label = body.get("week_label") or _current_week_label()
-    week_iso = body.get("week_iso") or _current_week_iso()
 
     try:
-        from services.drive_service import list_entries, write_summary
-        from services.claude_service import generate_weekly_summary
+        from services.llm_service import generate_weekly_summary
 
-        entries = list_entries(since_date=since_date)
-        summary_md = generate_weekly_summary(entries, week_label)
-        drive_url = write_summary(week_iso, summary_md)
+        anchor_date = _parse_iso_date(since_date)
+        week_window = _period_window("week", anchor_date)
+        week_label = body.get("week_label") or week_window["label"]
+        week_iso = body.get("week_iso") or week_window["period_key"]
+
+        result = _resolve_summary(
+            summary_kind=SUMMARY_KIND_WEEKLY_RECAP,
+            period="week",
+            period_key=week_iso,
+            label=week_label,
+            start_date=week_window["start_date"],
+            end_date=week_window["end_date"],
+            generator=lambda entries, label: generate_weekly_summary(entries, label),
+        )
 
         return jsonify({
             "success": True,
-            "drive_url": drive_url,
-            "entries_count": len(entries),
-            "summary_markdown": summary_md,
+            **result,
             "week_label": week_label,
         })
     except Exception as e:

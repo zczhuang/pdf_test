@@ -29,7 +29,7 @@ load_dotenv()
 
 def run_weekly_summary(week_start_override: str | None = None) -> dict:
     """
-    Generate and save the weekly summary.
+    Load or generate the weekly summary and save it when needed.
 
     Args:
         week_start_override: Optional YYYY-MM-DD to summarize a specific week.
@@ -37,8 +37,8 @@ def run_weekly_summary(week_start_override: str | None = None) -> dict:
     Returns:
         Result dict with success/error and drive_url.
     """
-    from services.claude_service import generate_weekly_summary
-    from services.drive_service import list_entries, write_summary
+    from app import SUMMARY_KIND_WEEKLY_RECAP, _period_window, _resolve_summary
+    from services.llm_service import generate_weekly_summary
 
     now = datetime.now(timezone.utc)
 
@@ -50,20 +50,29 @@ def run_weekly_summary(week_start_override: str | None = None) -> dict:
         # Monday of current ISO week
         week_start = now - timedelta(days=now.weekday())
 
-    since_date = week_start.strftime("%Y-%m-%d")
-    week_label = f"Week of {week_start.strftime('%B %-d, %Y')}"
-    week_iso = week_start.strftime("%G-W%V")
+    window = _period_window("week", week_start.date())
+    week_label = window["label"]
+    week_iso = window["period_key"]
 
-    print(f"Summarizing {week_label} (entries since {since_date})…")
+    print(f"Resolving summary for {week_label}…")
+    result = _resolve_summary(
+        summary_kind=SUMMARY_KIND_WEEKLY_RECAP,
+        period="week",
+        period_key=week_iso,
+        label=week_label,
+        start_date=window["start_date"],
+        end_date=window["end_date"],
+        generator=lambda entries, label: generate_weekly_summary(entries, label),
+    )
 
-    entries = list_entries(since_date=since_date)
-    print(f"Found {len(entries)} entries.")
-
-    summary_md = generate_weekly_summary(entries, week_label)
-    drive_url = write_summary(week_iso, summary_md)
-
-    print(f"Summary written to Drive: {drive_url}")
-    return {"success": True, "week": week_iso, "entries": len(entries), "drive_url": drive_url}
+    print(f"Summary {result['summary_source']} at: {result['drive_url']}")
+    return {
+        "success": True,
+        "week": week_iso,
+        "entries": result["entries_count"],
+        "drive_url": result["drive_url"],
+        "summary_source": result["summary_source"],
+    }
 
 
 if __name__ == "__main__":
