@@ -25,7 +25,7 @@ Flask on Cloud Run
     ├── OpenAI gpt-4o-mini-transcribe (voice → text)
     ├── YouTube Data API v3          (link enrichment)
     ├── Google Drive API             (storage)
-    └── Gemini API (gemini-3.1-flash-lite-preview-06-17) (tagging + summaries)
+    └── Gemini API (gemini-2.5-flash-lite) (tagging + summaries)
 
 Cloud Scheduler → POST /summarize   (every Sunday 9 PM UTC)
 ```
@@ -164,7 +164,7 @@ python -m scheduler.summarize --week-start 2026-03-02
 |---|---|
 | Cloud Run (personal use) | Free tier / ~$0 |
 | OpenAI gpt-4o-mini-transcribe | usage-based |
-| Gemini API (gemini-3.1-flash-lite-preview-06-17) | low usage-based cost |
+| Gemini API (gemini-2.5-flash-lite) | low usage-based cost |
 | Google Drive API | Free |
 | YouTube Data API | Free (10K quota units/day) |
 | Cloud Scheduler | Free (≤3 jobs) |

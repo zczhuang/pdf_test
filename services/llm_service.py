@@ -10,7 +10,7 @@ import os
 from google import genai
 from google.genai import types
 
-DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite-preview-06-17"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 _SYSTEM_PROMPT_SUMMARY = """\
 You are a warm, thoughtful journaling companion. The user keeps a daily reflective \
