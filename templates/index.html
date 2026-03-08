@@ -573,6 +573,20 @@
       gap: 8px;
     }
 
+    .inline-link {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 10px;
+      color: var(--accent);
+      font-size: 0.88rem;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .inline-link[hidden] {
+      display: none;
+    }
+
     #googlePhotosSelections,
     #tagsContainer {
       margin-top: 12px;
@@ -932,12 +946,15 @@
               Google Photos needs a one-time account connection.
               {% endif %}
             </div>
+            <a id="googlePhotosFallbackLink" class="inline-link" href="#" target="_blank" rel="noopener noreferrer" hidden>
+              Open Google Photos manually
+            </a>
             <div id="googlePhotosSelections" class="selected-strip"></div>
           </article>
 
           <article class="media-card">
-            <h4>Upload from your device</h4>
-            <p>Best for smaller captures. For longer videos, Google Photos or a pasted link is usually smoother.</p>
+            <h4>Upload from your iPhone or device</h4>
+            <p>On iPhone this opens the native Photos or Files picker. It is best for smaller captures; Google Photos is the separate button above.</p>
             <label class="file-label" for="mediaInput">Choose a file</label>
             <input type="file" id="mediaInput" accept="image/*,video/*" />
             <div class="upload-preview">
@@ -1024,6 +1041,54 @@
   const googlePhotosBtn = document.getElementById("googlePhotosBtn");
   const googlePhotosStatus = document.getElementById("googlePhotosStatus");
   const googlePhotosSelections = document.getElementById("googlePhotosSelections");
+  const googlePhotosFallbackLink = document.getElementById("googlePhotosFallbackLink");
+
+  function isIOSLike() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+
+  function openGooglePhotosShell() {
+    const shell = window.open("", "_blank");
+    if (!shell) return null;
+
+    try {
+      shell.document.write(`
+        <!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>Opening Google Photos...</title>
+            <style>
+              body {
+                margin: 0;
+                min-height: 100vh;
+                display: grid;
+                place-items: center;
+                background: #f5eddf;
+                color: #24324c;
+                font: 16px/1.5 Manrope, -apple-system, BlinkMacSystemFont, sans-serif;
+              }
+              div {
+                max-width: 28rem;
+                padding: 24px;
+                text-align: center;
+              }
+            </style>
+          </head>
+          <body>
+            <div>Opening Google Photos...</div>
+          </body>
+        </html>
+      `);
+      shell.document.close();
+    } catch (err) {
+      // Ignore cross-browser document write failures and still use the window handle.
+    }
+
+    return shell;
+  }
 
   if (googlePhotosBtn) {
     googlePhotosBtn.addEventListener("click", async () => {
@@ -1032,9 +1097,11 @@
         return;
       }
 
+      let pickerWindow = openGooglePhotosShell();
       googlePhotosBtn.disabled = true;
       googlePhotosBtn.textContent = "Opening Google Photos...";
       googlePhotosStatus.textContent = "Waiting for your Google Photos selection...";
+      googlePhotosFallbackLink.hidden = true;
       renderGooglePhotosSelections([]);
 
       try {
@@ -1048,16 +1115,17 @@
           throw new Error(data.error || "Unable to create a Google Photos session");
         }
 
-        const pickerWindow = window.open(
-          `${data.picker_uri}/autoclose`,
-          "_blank",
-          "noopener,noreferrer"
-        );
-
         if (!pickerWindow) {
-          throw new Error("Popup blocked. Allow popups and try again.");
+          googlePhotosFallbackLink.href = `${data.picker_uri}/autoclose`;
+          googlePhotosFallbackLink.hidden = false;
+          throw new Error(
+            isIOSLike()
+              ? "Safari blocked the new tab. Tap the link below to open Google Photos."
+              : "Your browser blocked the new tab. Tap the link below to open Google Photos."
+          );
         }
 
+        pickerWindow.location.replace(`${data.picker_uri}/autoclose`);
         googlePhotosBtn.textContent = "Waiting for selection...";
         pollGooglePhotosSession(
           data.id,
@@ -1065,10 +1133,14 @@
           Date.now() + (data.timeout_ms || 180000)
         );
       } catch (err) {
+        if (pickerWindow && !pickerWindow.closed) {
+          pickerWindow.close();
+        }
+        const message = err.message || "Google Photos selection failed.";
         googlePhotosBtn.disabled = false;
         googlePhotosBtn.textContent = GOOGLE_PHOTOS_BUTTON_LABEL;
-        googlePhotosStatus.textContent = "Google Photos selection failed.";
-        showToast(err.message || "Google Photos selection failed.", "error");
+        googlePhotosStatus.textContent = message;
+        showToast(message, "error");
       }
     });
   }
@@ -1111,6 +1183,7 @@
           googlePhotosItems = itemsData.items || [];
           renderGooglePhotosSelections(googlePhotosItems);
           googlePhotosStatus.textContent = `${googlePhotosItems.length} item(s) selected from Google Photos.`;
+          googlePhotosFallbackLink.hidden = true;
           googlePhotosBtn.disabled = false;
           googlePhotosBtn.textContent = GOOGLE_PHOTOS_BUTTON_LABEL;
           return;
@@ -1310,6 +1383,8 @@
           document.getElementById("mediaHint").textContent = "For longer videos, Google Photos or pasted links are more reliable than direct upload.";
           googlePhotosItems = [];
           renderGooglePhotosSelections([]);
+          googlePhotosFallbackLink.hidden = true;
+          googlePhotosFallbackLink.removeAttribute("href");
           googlePhotosStatus.textContent = GOOGLE_PHOTOS_ENABLED
             ? "Pick directly from your Google Photos library."
             : "Google Photos needs a one-time account connection.";
