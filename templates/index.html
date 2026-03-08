@@ -196,6 +196,7 @@
     }
     input[type="file"] { display: none; }
     #imagePreview { max-width: 100%; border-radius: 8px; margin-bottom: 12px; display: none; }
+    #videoPreview { width: 100%; border-radius: 8px; margin-bottom: 12px; display: none; }
 
     .hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 14px; }
 
@@ -316,10 +317,11 @@
       </div>
       <button id="addLinkBtn">+ Add another link</button>
 
-      <label style="margin-top:8px">Upload image</label>
-      <label class="file-label" for="imageInput">Choose image...</label>
-      <input type="file" id="imageInput" accept="image/*" capture="camera" />
+      <label style="margin-top:8px">Upload photo or video</label>
+      <label class="file-label" for="mediaInput">Choose from gallery or Photos...</label>
+      <input type="file" id="mediaInput" accept="image/*,video/*" />
       <img id="imagePreview" alt="preview" />
+      <video id="videoPreview" controls playsinline></video>
     </div>
   </div>
 
@@ -366,13 +368,25 @@
     this.closest(".media-link-row").querySelector("input").value = "";
   });
 
-  // Image preview
-  document.getElementById("imageInput").addEventListener("change", e => {
+  // Media preview
+  document.getElementById("mediaInput").addEventListener("change", e => {
     const file = e.target.files[0];
     if (!file) return;
-    const prev = document.getElementById("imagePreview");
-    prev.src = URL.createObjectURL(file);
-    prev.style.display = "block";
+    const imagePreview = document.getElementById("imagePreview");
+    const videoPreview = document.getElementById("videoPreview");
+    const objectUrl = URL.createObjectURL(file);
+
+    if (file.type.startsWith("video/")) {
+      imagePreview.style.display = "none";
+      imagePreview.removeAttribute("src");
+      videoPreview.src = objectUrl;
+      videoPreview.style.display = "block";
+    } else {
+      videoPreview.style.display = "none";
+      videoPreview.removeAttribute("src");
+      imagePreview.src = objectUrl;
+      imagePreview.style.display = "block";
+    }
   });
 
   // Voice recorder
@@ -481,8 +495,8 @@
     const mediaLinks = getMediaLinks();
     if (mediaLinks.length > 0) fd.append("media_urls", JSON.stringify(mediaLinks));
 
-    const imageFile = document.getElementById("imageInput").files[0];
-    if (imageFile) fd.append("image", imageFile);
+    const mediaFile = document.getElementById("mediaInput").files[0];
+    if (mediaFile) fd.append("media", mediaFile);
 
     if (audioBlob) fd.append("audio", audioBlob, "recording.webm");
 
@@ -501,8 +515,11 @@
         setTimeout(() => {
           document.getElementById("reflectionText").value = "";
           document.querySelectorAll(".media-link-input").forEach(i => i.value = "");
-          document.getElementById("imageInput").value = "";
+          document.getElementById("mediaInput").value = "";
           document.getElementById("imagePreview").style.display = "none";
+          document.getElementById("imagePreview").removeAttribute("src");
+          document.getElementById("videoPreview").style.display = "none";
+          document.getElementById("videoPreview").removeAttribute("src");
           audioBlob = null;
           playBtn.disabled = true;
           discardBtn.disabled = true;

@@ -91,7 +91,7 @@ def save_entry():
       text        (str)  thoughts/reflection text
       media_urls  (str)  JSON array of URLs (YouTube, Google Photos, any link)
       audio       (file) optional: save the raw recording to Drive
-      image       (file) optional: attach an image
+      media       (file) optional: attach a photo or video
     """
     text = (request.form.get("text") or "").strip()
 
@@ -127,21 +127,22 @@ def save_entry():
             except Exception:
                 app.logger.exception("Audio upload failed — skipping")
 
-    # Upload image to Drive if provided
-    if "image" in request.files:
-        image_file = request.files["image"]
-        image_bytes = image_file.read()
-        if image_bytes:
+    # Upload photo/video to Drive if provided
+    media_file = request.files.get("media") or request.files.get("image")
+    if media_file:
+        media_bytes = media_file.read()
+        if media_bytes:
             try:
                 from services.drive_service import upload_media
+
                 link = upload_media(
-                    f"{date}-{image_file.filename}",
-                    image_bytes,
-                    image_file.content_type or "image/jpeg",
+                    f"{date}-{media_file.filename}",
+                    media_bytes,
+                    media_file.content_type or "application/octet-stream",
                 )
-                media_links.append({"label": image_file.filename, "url": link["url"]})
+                media_links.append({"label": media_file.filename, "url": link["url"]})
             except Exception:
-                app.logger.exception("Image upload failed — skipping")
+                app.logger.exception("Media upload failed — skipping")
 
     # Enrich YouTube URLs
     enriched_urls: list[dict] = []
