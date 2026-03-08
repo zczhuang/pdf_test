@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Journal</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #f8f6f2;
+      --surface:  #ffffff;
+      --border:   #e2ddd6;
+      --text:     #2d2926;
+      --muted:    #7a746c;
+      --accent:   #5b6af0;
+      --accent-h: #4455e0;
+      --work:     #e8f0fe;
+      --work-b:   #4285f4;
+      --life:     #fef3e0;
+      --life-b:   #f9a825;
+      --faith:    #f0f8f0;
+      --faith-b:  #34a853;
+      --danger:   #d93025;
+      --rec:      #ea4335;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 64px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    header h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.5px; }
+    header p  { color: var(--muted); margin-top: 4px; font-size: 0.95rem; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      width: 100%;
+      max-width: 640px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    }
+
+    /* ── Category ── */
+    .category-row { display: flex; gap: 10px; margin-bottom: 24px; }
+    .cat-btn {
+      flex: 1;
+      padding: 10px 0;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      background: transparent;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: all .15s;
+    }
+    .cat-btn[data-cat="work"]  { color: var(--work-b);  }
+    .cat-btn[data-cat="life"]  { color: var(--life-b);  }
+    .cat-btn[data-cat="faith"] { color: var(--faith-b); }
+    .cat-btn[data-cat="work"].active  { background: var(--work);  border-color: var(--work-b);  }
+    .cat-btn[data-cat="life"].active  { background: var(--life);  border-color: var(--life-b);  }
+    .cat-btn[data-cat="faith"].active { background: var(--faith); border-color: var(--faith-b); }
+
+    /* ── Voice recorder ── */
+    .mic-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    #micBtn {
+      width: 88px;
+      height: 88px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-size: 2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform .1s, background .15s;
+      box-shadow: 0 4px 16px rgba(91,106,240,.35);
+    }
+    #micBtn:hover  { background: var(--accent-h); transform: scale(1.04); }
+    #micBtn.recording { background: var(--rec); animation: pulse 1.2s infinite; }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(234,67,53,.4); }
+      50%      { box-shadow: 0 0 0 14px rgba(234,67,53,0); }
+    }
+
+    #micStatus { font-size: 0.85rem; color: var(--muted); min-height: 20px; }
+
+    .mic-controls { display: flex; gap: 10px; }
+    .mic-controls button {
+      padding: 6px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: var(--text);
+      transition: background .12s;
+    }
+    .mic-controls button:hover { background: var(--bg); }
+    .mic-controls button:disabled { opacity: .4; cursor: default; }
+
+    /* ── Text area ── */
+    label { display: block; font-size: 0.82rem; font-weight: 600;
+            color: var(--muted); text-transform: uppercase;
+            letter-spacing: .5px; margin-bottom: 6px; }
+    textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 1rem;
+      line-height: 1.6;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 150px;
+      background: var(--bg);
+      color: var(--text);
+      margin-bottom: 18px;
+      transition: border-color .15s;
+    }
+    textarea:focus { outline: none; border-color: var(--accent); }
+
+    /* ── Optional fields ── */
+    .optional-section {
+      border-top: 1px solid var(--border);
+      padding-top: 18px;
+      margin-bottom: 18px;
+    }
+    .optional-toggle {
+      background: none;
+      border: none;
+      color: var(--accent);
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 0;
+      margin-bottom: 14px;
+    }
+    .optional-fields { display: none; }
+    .optional-fields.open { display: block; }
+
+    input[type="text"], input[type="url"] {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    input[type="text"]:focus, input[type="url"]:focus {
+      outline: none; border-color: var(--accent);
+    }
+
+    .file-label {
+      display: inline-block;
+      padding: 8px 16px;
+      background: var(--bg);
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.87rem;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    input[type="file"] { display: none; }
+    #imagePreview { max-width: 100%; border-radius: 8px; margin-bottom: 12px; display: none; }
+
+    /* ── Save button ── */
+    #saveBtn {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    #saveBtn:hover    { background: var(--accent-h); }
+    #saveBtn:disabled { opacity: .5; cursor: default; }
+
+    /* ── Toast & feedback ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--text);
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 0.92rem;
+      pointer-events: none;
+      transition: transform .3s ease;
+      z-index: 100;
+      max-width: 90vw;
+      text-align: center;
+    }
+    #toast.show    { transform: translateX(-50%) translateY(0); }
+    #toast.success { background: #188038; }
+    #toast.error   { background: var(--danger); }
+
+    /* ── Weekly summary button ── */
+    .summary-row {
+      margin-top: 20px;
+      text-align: center;
+    }
+    #summaryBtn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 20px;
+      font-size: 0.88rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    #summaryBtn:hover { border-color: var(--accent); color: var(--accent); }
+    #summaryBtn:disabled { opacity: .5; cursor: default; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Evening Journal</h1>
+  <p id="dateDisplay"></p>
+</header>
+
+<div class="card">
+
+  <!-- Category -->
+  <div class="category-row">
+    <button class="cat-btn active" data-cat="work">Work</button>
+    <button class="cat-btn" data-cat="life">Life</button>
+    <button class="cat-btn" data-cat="faith">Faith</button>
+  </div>
+
+  <!-- Voice recorder -->
+  <div class="mic-section">
+    <button id="micBtn" title="Record voice reflection">🎙️</button>
+    <span id="micStatus">Tap to record your reflection</span>
+    <div class="mic-controls">
+      <button id="playBtn" disabled>▶ Play</button>
+      <button id="discardBtn" disabled>✕ Discard</button>
+    </div>
+  </div>
+
+  <!-- Reflection text -->
+  <label for="reflectionText">Reflection</label>
+  <textarea
+    id="reflectionText"
+    placeholder="Your thoughts will appear here after recording, or type directly…"
+  ></textarea>
+
+  <!-- Optional extras -->
+  <div class="optional-section">
+    <button class="optional-toggle" id="optToggle">+ Add YouTube link or image</button>
+    <div class="optional-fields" id="optFields">
+      <label for="youtubeUrl">YouTube URL</label>
+      <input type="url" id="youtubeUrl" placeholder="https://youtube.com/watch?v=..." />
+
+      <label>Image</label>
+      <label class="file-label" for="imageInput">Choose image…</label>
+      <input type="file" id="imageInput" accept="image/*" />
+      <img id="imagePreview" alt="preview" />
+    </div>
+  </div>
+
+  <!-- Save -->
+  <button id="saveBtn">Save Entry</button>
+</div>
+
+<!-- Weekly summary trigger -->
+<div class="summary-row">
+  <button id="summaryBtn">Generate this week's summary</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ── Date display ──────────────────────────────────────────────────────────
+  const now = new Date();
+  document.getElementById("dateDisplay").textContent =
+    now.toLocaleDateString("en-US", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+
+  // ── Category selector ─────────────────────────────────────────────────────
+  let category = "work";
+  document.querySelectorAll(".cat-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      category = btn.dataset.cat;
+    });
+  });
+
+  // ── Optional toggle ───────────────────────────────────────────────────────
+  document.getElementById("optToggle").addEventListener("click", () => {
+    const f = document.getElementById("optFields");
+    f.classList.toggle("open");
+    document.getElementById("optToggle").textContent =
+      f.classList.contains("open") ? "− Hide extras" : "+ Add YouTube link or image";
+  });
+
+  // ── Image preview ─────────────────────────────────────────────────────────
+  document.getElementById("imageInput").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const prev = document.getElementById("imagePreview");
+    prev.src = URL.createObjectURL(file);
+    prev.style.display = "block";
+  });
+
+  // ── Voice recorder ────────────────────────────────────────────────────────
+  let mediaRecorder = null;
+  let audioChunks   = [];
+  let audioBlob     = null;
+  let audioPlayer   = null;
+  let stream        = null;
+
+  const micBtn     = document.getElementById("micBtn");
+  const micStatus  = document.getElementById("micStatus");
+  const playBtn    = document.getElementById("playBtn");
+  const discardBtn = document.getElementById("discardBtn");
+
+  micBtn.addEventListener("click", async () => {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunks = [];
+      audioBlob = null;
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.ondataavailable = e => {
+        if (e.data.size > 0) audioChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+        audioPlayer = new Audio(URL.createObjectURL(audioBlob));
+        playBtn.disabled = false;
+        discardBtn.disabled = false;
+        micBtn.classList.remove("recording");
+        micBtn.textContent = "🎙️";
+        micStatus.textContent = "Recording saved. Transcribing…";
+
+        // Auto-transcribe
+        await transcribeAudio();
+      };
+
+      mediaRecorder.start();
+      micBtn.classList.add("recording");
+      micBtn.textContent = "⏹";
+      micStatus.textContent = "Recording… tap to stop";
+    } catch (err) {
+      showToast("Microphone access denied. Please allow mic access and retry.", "error");
+    }
+  });
+
+  playBtn.addEventListener("click", () => {
+    if (audioPlayer) audioPlayer.play();
+  });
+
+  discardBtn.addEventListener("click", () => {
+    audioBlob = null;
+    audioPlayer = null;
+    playBtn.disabled = true;
+    discardBtn.disabled = true;
+    micStatus.textContent = "Recording discarded. Tap to record again.";
+  });
+
+  async function transcribeAudio() {
+    if (!audioBlob) return;
+    const fd = new FormData();
+    fd.append("audio", audioBlob, "recording.webm");
+    try {
+      const res = await fetch("/transcribe", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.text) {
+        const ta = document.getElementById("reflectionText");
+        ta.value = ta.value ? ta.value + "\n\n" + data.text : data.text;
+        micStatus.textContent = "Transcribed! Edit below if needed.";
+      } else {
+        micStatus.textContent = "Transcription returned empty. You can type your reflection.";
+      }
+    } catch {
+      micStatus.textContent = "Transcription failed. Type your reflection below.";
+    }
+  }
+
+  // ── Save entry ────────────────────────────────────────────────────────────
+  document.getElementById("saveBtn").addEventListener("click", async () => {
+    const text = document.getElementById("reflectionText").value.trim();
+    if (!text) { showToast("Please write or record a reflection first.", "error"); return; }
+
+    const saveBtn = document.getElementById("saveBtn");
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+
+    const fd = new FormData();
+    fd.append("category", category);
+    fd.append("text", text);
+
+    const youtubeUrl = document.getElementById("youtubeUrl").value.trim();
+    if (youtubeUrl) fd.append("youtube_url", youtubeUrl);
+
+    const imageFile = document.getElementById("imageInput").files[0];
+    if (imageFile) fd.append("image", imageFile);
+
+    if (audioBlob) fd.append("audio", audioBlob, "recording.webm");
+
+    try {
+      const res = await fetch("/entry", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Entry saved to Google Drive!", "success");
+        setTimeout(() => {
+          document.getElementById("reflectionText").value = "";
+          document.getElementById("youtubeUrl").value = "";
+          document.getElementById("imageInput").value = "";
+          document.getElementById("imagePreview").style.display = "none";
+          audioBlob = null;
+          playBtn.disabled = true;
+          discardBtn.disabled = true;
+          micStatus.textContent = "Tap to record your reflection";
+        }, 1500);
+      } else {
+        showToast("Error: " + (data.error || "Unknown error"), "error");
+      }
+    } catch (err) {
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save Entry";
+    }
+  });
+
+  // ── Weekly summary ────────────────────────────────────────────────────────
+  document.getElementById("summaryBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("summaryBtn");
+    btn.disabled = true;
+    btn.textContent = "Generating summary…";
+    try {
+      const res = await fetch("/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(
+          `Weekly summary saved to Drive! (${data.entries_count} entries)`,
+          "success"
+        );
+      } else {
+        showToast("Error: " + (data.error || "Unknown error"), "error");
+      }
+    } catch {
+      showToast("Network error generating summary.", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Generate this week's summary";
+    }
+  });
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  function showToast(msg, type = "") {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "show " + type;
+    setTimeout(() => { t.className = ""; }, 4000);
+  }
+</script>
+</body>
+</html>
