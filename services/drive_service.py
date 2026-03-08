@@ -48,7 +48,7 @@ def _find_or_create_folder(service, name: str, parent_id: str) -> str:
         f"mimeType = 'application/vnd.google-apps.folder' and "
         f"'{parent_id}' in parents and trashed = false"
     )
-    results = service.files().list(q=query, fields="files(id)").execute()
+    results = service.files().list(q=query, fields="files(id)", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
     files = results.get("files", [])
 
     if files:
@@ -59,7 +59,7 @@ def _find_or_create_folder(service, name: str, parent_id: str) -> str:
             "mimeType": "application/vnd.google-apps.folder",
             "parents": [parent_id],
         }
-        folder = service.files().create(body=metadata, fields="id").execute()
+        folder = service.files().create(body=metadata, fields="id", supportsAllDrives=True).execute()
         folder_id = folder["id"]
 
     _folder_id_cache[cache_key] = folder_id
@@ -186,7 +186,7 @@ def list_entries(since_date: str | None = None) -> list[dict]:
     query = f"'{entries_folder}' in parents and trashed = false and name contains '.md'"
     results = (
         service.files()
-        .list(q=query, fields="files(id, name)", orderBy="name")
+        .list(q=query, fields="files(id, name)", orderBy="name", supportsAllDrives=True, includeItemsFromAllDrives=True)
         .execute()
     )
     files = results.get("files", [])
@@ -206,7 +206,7 @@ def list_entries(since_date: str | None = None) -> list[dict]:
 
 def _find_file(service, name: str, parent_id: str) -> dict | None:
     query = f"name = '{name}' and '{parent_id}' in parents and trashed = false"
-    results = service.files().list(q=query, fields="files(id, name)").execute()
+    results = service.files().list(q=query, fields="files(id, name)", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
     files = results.get("files", [])
     return files[0] if files else None
 
@@ -216,17 +216,17 @@ def _create_file(
 ) -> str:
     metadata = {"name": name, "parents": [parent_id]}
     media = MediaInMemoryUpload(data, mimetype=mime_type)
-    f = service.files().create(body=metadata, media_body=media, fields="id").execute()
+    f = service.files().create(body=metadata, media_body=media, fields="id", supportsAllDrives=True).execute()
     return f["id"]
 
 
 def _update_file(service, file_id: str, data: bytes) -> None:
     media = MediaInMemoryUpload(data, mimetype="text/markdown")
-    service.files().update(fileId=file_id, media_body=media).execute()
+    service.files().update(fileId=file_id, media_body=media, supportsAllDrives=True).execute()
 
 
 def _download_file(service, file_id: str) -> str:
-    request = service.files().get_media(fileId=file_id)
+    request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
     buf = io.BytesIO()
     downloader = MediaIoBaseDownload(buf, request)
     done = False
