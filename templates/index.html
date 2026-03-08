@@ -18,14 +18,10 @@
       --muted:    #7a746c;
       --accent:   #5b6af0;
       --accent-h: #4455e0;
-      --work:     #e8f0fe;
-      --work-b:   #4285f4;
-      --life:     #fef3e0;
-      --life-b:   #f9a825;
-      --faith:    #f0f8f0;
-      --faith-b:  #34a853;
       --danger:   #d93025;
       --rec:      #ea4335;
+      --tag-bg:   #eef0fb;
+      --tag-text: #4455e0;
     }
 
     body {
@@ -33,12 +29,12 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      min-height: 100dvh; /* dynamic viewport height — avoids mobile browser chrome overlap */
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
       padding: 24px 16px 80px;
-      padding-bottom: max(80px, env(safe-area-inset-bottom) + 16px); /* notch/home bar */
+      padding-bottom: max(80px, env(safe-area-inset-bottom) + 16px);
     }
 
     header {
@@ -58,27 +54,7 @@
       box-shadow: 0 2px 12px rgba(0,0,0,.06);
     }
 
-    /* ── Category ── */
-    .category-row { display: flex; gap: 10px; margin-bottom: 24px; }
-    .cat-btn {
-      flex: 1;
-      padding: 10px 0;
-      border: 2px solid var(--border);
-      border-radius: 10px;
-      background: transparent;
-      cursor: pointer;
-      font-size: 0.9rem;
-      font-weight: 600;
-      transition: all .15s;
-    }
-    .cat-btn[data-cat="work"]  { color: var(--work-b);  }
-    .cat-btn[data-cat="life"]  { color: var(--life-b);  }
-    .cat-btn[data-cat="faith"] { color: var(--faith-b); }
-    .cat-btn[data-cat="work"].active  { background: var(--work);  border-color: var(--work-b);  }
-    .cat-btn[data-cat="life"].active  { background: var(--life);  border-color: var(--life-b);  }
-    .cat-btn[data-cat="faith"].active { background: var(--faith); border-color: var(--faith-b); }
-
-    /* ── Voice recorder ── */
+    /* Voice recorder */
     .mic-section {
       display: flex;
       flex-direction: column;
@@ -124,7 +100,7 @@
     .mic-controls button:hover { background: var(--bg); }
     .mic-controls button:disabled { opacity: .4; cursor: default; }
 
-    /* ── Text area ── */
+    /* Text area */
     label { display: block; font-size: 0.82rem; font-weight: 600;
             color: var(--muted); text-transform: uppercase;
             letter-spacing: .5px; margin-bottom: 6px; }
@@ -145,13 +121,13 @@
     }
     textarea:focus { outline: none; border-color: var(--accent); }
 
-    /* ── Optional fields ── */
-    .optional-section {
+    /* Media links section */
+    .media-section {
       border-top: 1px solid var(--border);
       padding-top: 18px;
       margin-bottom: 18px;
     }
-    .optional-toggle {
+    .media-toggle {
       background: none;
       border: none;
       color: var(--accent);
@@ -160,11 +136,17 @@
       padding: 0;
       margin-bottom: 14px;
     }
-    .optional-fields { display: none; }
-    .optional-fields.open { display: block; }
+    .media-fields { display: none; }
+    .media-fields.open { display: block; }
 
-    input[type="text"], input[type="url"] {
-      width: 100%;
+    .media-link-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    .media-link-row input {
+      flex: 1;
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 10px 14px;
@@ -172,11 +154,34 @@
       font-family: inherit;
       background: var(--bg);
       color: var(--text);
-      margin-bottom: 12px;
     }
-    input[type="text"]:focus, input[type="url"]:focus {
-      outline: none; border-color: var(--accent);
+    .media-link-row input:focus { outline: none; border-color: var(--accent); }
+    .remove-link-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
+    .remove-link-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+    #addLinkBtn {
+      background: none;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.87rem;
+      color: var(--muted);
+      cursor: pointer;
+      margin-bottom: 14px;
+    }
+    #addLinkBtn:hover { border-color: var(--accent); color: var(--accent); }
 
     .file-label {
       display: inline-block;
@@ -192,7 +197,28 @@
     input[type="file"] { display: none; }
     #imagePreview { max-width: 100%; border-radius: 8px; margin-bottom: 12px; display: none; }
 
-    /* ── Save button ── */
+    .hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 14px; }
+
+    /* Tags display */
+    .tags-display {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+      margin-bottom: 14px;
+      min-height: 0;
+    }
+    .tag {
+      display: inline-block;
+      padding: 3px 10px;
+      background: var(--tag-bg);
+      color: var(--tag-text);
+      border-radius: 12px;
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+
+    /* Save button */
     #saveBtn {
       width: 100%;
       padding: 14px;
@@ -208,7 +234,7 @@
     #saveBtn:hover    { background: var(--accent-h); }
     #saveBtn:disabled { opacity: .5; cursor: default; }
 
-    /* ── Toast & feedback ── */
+    /* Toast */
     #toast {
       position: fixed;
       bottom: 24px;
@@ -229,7 +255,7 @@
     #toast.success { background: #188038; }
     #toast.error   { background: var(--danger); }
 
-    /* ── Weekly summary button ── */
+    /* Weekly summary button */
     .summary-row {
       margin-top: 20px;
       text-align: center;
@@ -251,45 +277,47 @@
 <body>
 
 <header>
-  <h1>Evening Journal</h1>
+  <h1>JournalPal</h1>
   <p id="dateDisplay"></p>
 </header>
 
 <div class="card">
 
-  <!-- Category -->
-  <div class="category-row">
-    <button class="cat-btn active" data-cat="work">Work</button>
-    <button class="cat-btn" data-cat="life">Life</button>
-    <button class="cat-btn" data-cat="faith">Faith</button>
-  </div>
-
   <!-- Voice recorder -->
   <div class="mic-section">
-    <button id="micBtn" title="Record voice reflection">🎙️</button>
-    <span id="micStatus">Tap to record your reflection</span>
+    <button id="micBtn" title="Record your thoughts">🎙️</button>
+    <span id="micStatus">Tap to record your thoughts</span>
     <div class="mic-controls">
       <button id="playBtn" disabled>▶ Play</button>
       <button id="discardBtn" disabled>✕ Discard</button>
     </div>
   </div>
 
-  <!-- Reflection text -->
-  <label for="reflectionText">Reflection</label>
+  <!-- Thoughts text -->
+  <label for="reflectionText">What's on your mind?</label>
   <textarea
     id="reflectionText"
-    placeholder="Your thoughts will appear here after recording, or type directly…"
+    placeholder="Your thoughts will appear here after recording, or type directly..."
   ></textarea>
 
-  <!-- Optional extras -->
-  <div class="optional-section">
-    <button class="optional-toggle" id="optToggle">+ Add YouTube link or image</button>
-    <div class="optional-fields" id="optFields">
-      <label for="youtubeUrl">YouTube URL</label>
-      <input type="url" id="youtubeUrl" placeholder="https://youtube.com/watch?v=..." />
+  <!-- AI tags (shown after save) -->
+  <div id="tagsContainer" class="tags-display"></div>
 
-      <label>Image</label>
-      <label class="file-label" for="imageInput">Choose image…</label>
+  <!-- Media links -->
+  <div class="media-section">
+    <button class="media-toggle" id="mediaToggle">+ Add links or images</button>
+    <div class="media-fields" id="mediaFields">
+      <p class="hint">Paste YouTube, Google Photos, or any image/video URL</p>
+      <div id="mediaLinksContainer">
+        <div class="media-link-row">
+          <input type="url" placeholder="https://..." class="media-link-input" />
+          <button class="remove-link-btn" title="Remove">&times;</button>
+        </div>
+      </div>
+      <button id="addLinkBtn">+ Add another link</button>
+
+      <label style="margin-top:8px">Upload image</label>
+      <label class="file-label" for="imageInput">Choose image...</label>
       <input type="file" id="imageInput" accept="image/*" capture="camera" />
       <img id="imagePreview" alt="preview" />
     </div>
@@ -307,30 +335,38 @@
 <div id="toast"></div>
 
 <script>
-  // ── Date display ──────────────────────────────────────────────────────────
+  // Date display
   const now = new Date();
   document.getElementById("dateDisplay").textContent =
     now.toLocaleDateString("en-US", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
 
-  // ── Category selector ─────────────────────────────────────────────────────
-  let category = "work";
-  document.querySelectorAll(".cat-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      category = btn.dataset.cat;
-    });
-  });
-
-  // ── Optional toggle ───────────────────────────────────────────────────────
-  document.getElementById("optToggle").addEventListener("click", () => {
-    const f = document.getElementById("optFields");
+  // Media toggle
+  document.getElementById("mediaToggle").addEventListener("click", () => {
+    const f = document.getElementById("mediaFields");
     f.classList.toggle("open");
-    document.getElementById("optToggle").textContent =
-      f.classList.contains("open") ? "− Hide extras" : "+ Add YouTube link or image";
+    document.getElementById("mediaToggle").textContent =
+      f.classList.contains("open") ? "− Hide media" : "+ Add links or images";
   });
 
-  // ── Image preview ─────────────────────────────────────────────────────────
+  // Add/remove media link rows
+  document.getElementById("addLinkBtn").addEventListener("click", () => {
+    const container = document.getElementById("mediaLinksContainer");
+    const row = document.createElement("div");
+    row.className = "media-link-row";
+    row.innerHTML = `
+      <input type="url" placeholder="https://..." class="media-link-input" />
+      <button class="remove-link-btn" title="Remove">&times;</button>
+    `;
+    container.appendChild(row);
+    row.querySelector(".remove-link-btn").addEventListener("click", () => row.remove());
+  });
+
+  // Initial remove button
+  document.querySelector(".remove-link-btn").addEventListener("click", function() {
+    this.closest(".media-link-row").querySelector("input").value = "";
+  });
+
+  // Image preview
   document.getElementById("imageInput").addEventListener("change", e => {
     const file = e.target.files[0];
     if (!file) return;
@@ -339,7 +375,7 @@
     prev.style.display = "block";
   });
 
-  // ── Voice recorder ────────────────────────────────────────────────────────
+  // Voice recorder
   let mediaRecorder = null;
   let audioChunks   = [];
   let audioBlob     = null;
@@ -374,16 +410,15 @@
         discardBtn.disabled = false;
         micBtn.classList.remove("recording");
         micBtn.textContent = "🎙️";
-        micStatus.textContent = "Recording saved. Transcribing…";
+        micStatus.textContent = "Recording saved. Transcribing...";
 
-        // Auto-transcribe
         await transcribeAudio();
       };
 
       mediaRecorder.start();
       micBtn.classList.add("recording");
       micBtn.textContent = "⏹";
-      micStatus.textContent = "Recording… tap to stop";
+      micStatus.textContent = "Recording... tap to stop";
     } catch (err) {
       showToast("Microphone access denied. Please allow mic access and retry.", "error");
     }
@@ -413,28 +448,38 @@
         ta.value = ta.value ? ta.value + "\n\n" + data.text : data.text;
         micStatus.textContent = "Transcribed! Edit below if needed.";
       } else {
-        micStatus.textContent = "Transcription returned empty. You can type your reflection.";
+        micStatus.textContent = "Transcription returned empty. You can type instead.";
       }
     } catch {
-      micStatus.textContent = "Transcription failed. Type your reflection below.";
+      micStatus.textContent = "Transcription failed. Type your thoughts below.";
     }
   }
 
-  // ── Save entry ────────────────────────────────────────────────────────────
+  // Collect media links
+  function getMediaLinks() {
+    const inputs = document.querySelectorAll(".media-link-input");
+    const links = [];
+    inputs.forEach(input => {
+      const url = input.value.trim();
+      if (url) links.push(url);
+    });
+    return links;
+  }
+
+  // Save entry
   document.getElementById("saveBtn").addEventListener("click", async () => {
     const text = document.getElementById("reflectionText").value.trim();
-    if (!text) { showToast("Please write or record a reflection first.", "error"); return; }
+    if (!text) { showToast("Please write or record something first.", "error"); return; }
 
     const saveBtn = document.getElementById("saveBtn");
     saveBtn.disabled = true;
-    saveBtn.textContent = "Saving…";
+    saveBtn.textContent = "Saving...";
 
     const fd = new FormData();
-    fd.append("category", category);
     fd.append("text", text);
 
-    const youtubeUrl = document.getElementById("youtubeUrl").value.trim();
-    if (youtubeUrl) fd.append("youtube_url", youtubeUrl);
+    const mediaLinks = getMediaLinks();
+    if (mediaLinks.length > 0) fd.append("media_urls", JSON.stringify(mediaLinks));
 
     const imageFile = document.getElementById("imageInput").files[0];
     if (imageFile) fd.append("image", imageFile);
@@ -446,16 +491,23 @@
       const data = await res.json();
       if (data.success) {
         showToast("Entry saved to Google Drive!", "success");
+
+        // Show AI-generated tags
+        if (data.tags && data.tags.length > 0) {
+          const container = document.getElementById("tagsContainer");
+          container.innerHTML = data.tags.map(t => `<span class="tag">${t}</span>`).join("");
+        }
+
         setTimeout(() => {
           document.getElementById("reflectionText").value = "";
-          document.getElementById("youtubeUrl").value = "";
+          document.querySelectorAll(".media-link-input").forEach(i => i.value = "");
           document.getElementById("imageInput").value = "";
           document.getElementById("imagePreview").style.display = "none";
           audioBlob = null;
           playBtn.disabled = true;
           discardBtn.disabled = true;
-          micStatus.textContent = "Tap to record your reflection";
-        }, 1500);
+          micStatus.textContent = "Tap to record your thoughts";
+        }, 2000);
       } else {
         showToast("Error: " + (data.error || "Unknown error"), "error");
       }
@@ -467,11 +519,11 @@
     }
   });
 
-  // ── Weekly summary ────────────────────────────────────────────────────────
+  // Weekly summary
   document.getElementById("summaryBtn").addEventListener("click", async () => {
     const btn = document.getElementById("summaryBtn");
     btn.disabled = true;
-    btn.textContent = "Generating summary…";
+    btn.textContent = "Generating summary...";
     try {
       const res = await fetch("/summarize", {
         method: "POST",
@@ -495,7 +547,7 @@
     }
   });
 
-  // ── Toast ─────────────────────────────────────────────────────────────────
+  // Toast
   function showToast(msg, type = "") {
     const t = document.getElementById("toast");
     t.textContent = msg;

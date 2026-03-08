@@ -39,6 +39,7 @@ def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
         encoding=encoding,
         sample_rate_hertz=sample_rate,
         language_code="en-US",
+        alternative_language_codes=["cmn-Hans-CN", "cmn-Hant-TW"],
         enable_automatic_punctuation=True,
         model="latest_long",
     )

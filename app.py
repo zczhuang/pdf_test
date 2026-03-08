@@ -4,11 +4,12 @@ Journal & Knowledge Management System — Flask backend.
 Routes:
   GET  /              → serve the journal UI
   POST /transcribe    → transcribe voice audio, return text
-  POST /entry         → save a journal entry to Google Drive
-  POST /summarize     → generate weekly summary via Claude (also called by Cloud Scheduler)
+  POST /entry         → save a journal entry to Google Drive (auto-tagged by LLM)
+  POST /summarize     → generate weekly summary via Claude
   GET  /health        → health check for Cloud Run
 """
 
+import json
 import os
 from datetime import datetime, timezone
 
@@ -29,14 +30,13 @@ def _today() -> str:
 
 def _current_week_label() -> str:
     now = datetime.now(timezone.utc)
-    # ISO week: e.g. "Week of March 3, 2026"
     week_start = now - __import__("datetime").timedelta(days=now.weekday())
     return f"Week of {week_start.strftime('%B %-d, %Y')}"
 
 
 def _current_week_iso() -> str:
     now = datetime.now(timezone.utc)
-    return now.strftime("%G-W%V")  # e.g. 2026-W10
+    return now.strftime("%G-W%V")
 
 
 def _week_start_date() -> str:
@@ -61,7 +61,7 @@ def health():
 def transcribe():
     """
     Receive an audio blob from the browser, return transcribed text.
-    Body: multipart/form-data with field 'audio' (blob).
+    Supports English and Mandarin Chinese (auto-detected).
     """
     if "audio" not in request.files:
         return jsonify({"error": "No audio file provided"}), 400
@@ -85,24 +85,30 @@ def transcribe():
 @app.post("/entry")
 def save_entry():
     """
-    Save a journal entry.
+    Save a journal entry. LLM auto-tags the content.
 
     Accepts multipart/form-data:
-      category   (str)  work | life | faith
-      text       (str)  reflection text
-      youtube_url (str) optional YouTube URL
-      audio      (file) optional: save the raw recording to Drive
-      image      (file) optional: attach an image
+      text        (str)  thoughts/reflection text
+      media_urls  (str)  JSON array of URLs (YouTube, Google Photos, any link)
+      audio       (file) optional: save the raw recording to Drive
+      image       (file) optional: attach an image
     """
-    category = request.form.get("category", "life")
     text = (request.form.get("text") or "").strip()
-    youtube_url = (request.form.get("youtube_url") or "").strip()
 
     if not text:
-        return jsonify({"error": "Reflection text is required"}), 400
+        return jsonify({"error": "Please write or record something first"}), 400
 
     date = _today()
     media_links: list[dict] = []
+    media_urls: list[str] = []
+
+    # Parse media URLs from the form
+    raw_media_urls = request.form.get("media_urls", "")
+    if raw_media_urls:
+        try:
+            media_urls = json.loads(raw_media_urls)
+        except json.JSONDecodeError:
+            pass
 
     # Upload raw audio to Drive if provided
     if "audio" in request.files:
@@ -137,28 +143,38 @@ def save_entry():
             except Exception:
                 app.logger.exception("Image upload failed — skipping")
 
-    # Enrich YouTube URL
-    youtube_title = None
-    if youtube_url:
-        try:
-            from services.youtube_service import enrich_youtube_url
-            info = enrich_youtube_url(youtube_url)
-            youtube_title = info.get("title", youtube_url)
-        except Exception:
-            app.logger.exception("YouTube enrichment failed — using raw URL")
+    # Enrich YouTube URLs
+    enriched_urls: list[dict] = []
+    for url in media_urls:
+        label = url
+        if "youtube.com" in url or "youtu.be" in url:
+            try:
+                from services.youtube_service import enrich_youtube_url
+                info = enrich_youtube_url(url)
+                label = info.get("title", url)
+            except Exception:
+                app.logger.exception("YouTube enrichment failed — using raw URL")
+        enriched_urls.append({"label": label, "url": url})
+
+    # Auto-tag the entry with Claude
+    tags: list[str] = []
+    try:
+        from services.claude_service import tag_entry
+        tags = tag_entry(text)
+    except Exception:
+        app.logger.exception("Auto-tagging failed — saving without tags")
 
     # Write entry to Drive
     try:
         from services.drive_service import write_entry
         drive_url = write_entry(
             date=date,
-            category=category,
             text=text,
-            youtube_url=youtube_url or None,
-            youtube_title=youtube_title,
+            tags=tags,
+            media_urls=enriched_urls or None,
             media_links=media_links or None,
         )
-        return jsonify({"success": True, "drive_url": drive_url, "date": date})
+        return jsonify({"success": True, "drive_url": drive_url, "date": date, "tags": tags})
     except Exception as e:
         app.logger.exception("Entry write failed")
         return jsonify({"error": str(e)}), 500
@@ -168,10 +184,6 @@ def save_entry():
 def summarize():
     """
     Generate a weekly summary for the current week.
-    Called automatically by Cloud Scheduler every Sunday, or manually from the UI.
-
-    Optional JSON body:
-      { "week_start": "YYYY-MM-DD" }   ← override which week to summarize
     """
     body = request.get_json(silent=True) or {}
     since_date = body.get("week_start") or _week_start_date()

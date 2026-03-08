@@ -3,10 +3,10 @@ Google Drive service — reads/writes journal entries and media as files in Driv
 
 Folder structure created automatically:
   <DRIVE_FOLDER_ID>/
-    entries/        ← one Markdown file per day (YYYY-MM-DD.md)
-    media/          ← audio, image uploads
+    entries/        <- one Markdown file per day (YYYY-MM-DD.md)
+    media/          <- audio, image uploads
     summaries/
-      weekly/       ← one Markdown file per week (YYYY-Wnn.md)
+      weekly/       <- one Markdown file per week (YYYY-Wnn.md)
 
 Auth: uses a Google Service Account (GOOGLE_APPLICATION_CREDENTIALS env var).
 Share the root folder with the service account email as an Editor.
@@ -22,13 +22,11 @@ from googleapiclient.http import MediaInMemoryUpload, MediaIoBaseDownload
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
-# Subfolder names inside the root journal folder
 SUBFOLDER_ENTRIES = "entries"
 SUBFOLDER_MEDIA = "media"
 SUBFOLDER_SUMMARIES = "summaries"
 SUBFOLDER_WEEKLY = "weekly"
 
-# Simple in-process cache so we don't re-query folder IDs on every request
 _folder_id_cache: dict[str, str] = {}
 
 
@@ -41,7 +39,6 @@ def _get_service():
 
 
 def _find_or_create_folder(service, name: str, parent_id: str) -> str:
-    """Return the Drive folder ID for `name` under `parent_id`, creating it if absent."""
     cache_key = f"{parent_id}/{name}"
     if cache_key in _folder_id_cache:
         return _folder_id_cache[cache_key]
@@ -87,10 +84,9 @@ def _get_weekly_summaries_folder(service) -> str:
 
 def write_entry(
     date: str,
-    category: str,
     text: str,
-    youtube_url: str | None = None,
-    youtube_title: str | None = None,
+    tags: list[str] | None = None,
+    media_urls: list[dict] | None = None,
     media_links: list[dict] | None = None,
 ) -> str:
     """Write a daily journal entry Markdown file to Drive. Returns the file's Drive URL."""
@@ -99,28 +95,29 @@ def write_entry(
 
     timestamp = datetime.utcnow().strftime("%H:%M UTC")
     lines = [
-        f"# Journal Entry — {date}",
+        f"# Journal — {date}",
         "",
-        f"**Category:** {category.capitalize()}",
         f"**Time:** {timestamp}",
-        "",
-        "## Reflection",
+    ]
+
+    if tags:
+        lines.append(f"**Tags:** {', '.join(tags)}")
+
+    lines += [
         "",
         text.strip(),
         "",
     ]
 
-    if youtube_url:
-        lines += [
-            "## Media",
-            "",
-            f"- **YouTube:** [{youtube_title or youtube_url}]({youtube_url})",
-            "",
-        ]
-    elif media_links:
+    # Media URLs (YouTube, Google Photos, etc.)
+    if media_urls or media_links:
         lines += ["## Media", ""]
-        for link in media_links:
-            lines.append(f"- {link['label']}: {link['url']}")
+        if media_urls:
+            for link in media_urls:
+                lines.append(f"- [{link['label']}]({link['url']})")
+        if media_links:
+            for link in media_links:
+                lines.append(f"- {link['label']}: {link['url']}")
         lines.append("")
 
     lines += [
@@ -180,7 +177,7 @@ def write_summary(week_label: str, content: str) -> str:
 
 def list_entries(since_date: str | None = None) -> list[dict]:
     """
-    Return a list of journal entries as dicts with keys: date, category, content.
+    Return a list of journal entries as dicts with keys: date, content, tags.
     Optionally filter to entries on or after `since_date` (YYYY-MM-DD).
     """
     service = _get_service()
@@ -200,7 +197,7 @@ def list_entries(since_date: str | None = None) -> list[dict]:
         if since_date and date_str < since_date:
             continue
         raw = _download_file(service, f["id"])
-        entries.append({"date": date_str, "content": raw, "category": _extract_category(raw)})
+        entries.append({"date": date_str, "content": raw, "tags": _extract_tags(raw)})
 
     return entries
 
@@ -238,9 +235,10 @@ def _download_file(service, file_id: str) -> str:
     return buf.getvalue().decode("utf-8")
 
 
-def _extract_category(content: str) -> str:
-    """Pull the category from a Markdown entry header."""
+def _extract_tags(content: str) -> list[str]:
+    """Pull tags from a Markdown entry header."""
     for line in content.splitlines():
-        if line.startswith("**Category:**"):
-            return line.replace("**Category:**", "").strip().lower()
-    return "general"
+        if line.startswith("**Tags:**"):
+            raw = line.replace("**Tags:**", "").strip()
+            return [t.strip() for t in raw.split(",") if t.strip()]
+    return []
