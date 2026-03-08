@@ -8,19 +8,22 @@ Folder structure created automatically:
     summaries/
       weekly/       <- one Markdown file per week (YYYY-Wnn.md)
 
-Auth: uses a Google Service Account (GOOGLE_APPLICATION_CREDENTIALS env var).
-Share the root folder with the service account email as an Editor.
+Auth: Uses OAuth2 refresh token (personal Google account) so files are owned by
+you and count against your 15 GB quota. Set env vars:
+  GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
 """
 
 import io
+import json
 import os
 from datetime import datetime
 
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaInMemoryUpload, MediaIoBaseDownload
 
-SCOPES = ["https://www.googleapis.com/auth/drive"]
+SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 SUBFOLDER_ENTRIES = "entries"
 SUBFOLDER_MEDIA = "media"
@@ -31,10 +34,30 @@ _folder_id_cache: dict[str, str] = {}
 
 
 def _get_service():
-    creds = service_account.Credentials.from_service_account_file(
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"],
-        scopes=SCOPES,
-    )
+    """Build Drive service using personal OAuth2 credentials."""
+    # Try OAuth2 refresh token first (personal Drive)
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+    refresh_token = os.environ.get("GOOGLE_REFRESH_TOKEN")
+
+    if client_id and client_secret and refresh_token:
+        creds = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            client_id=client_id,
+            client_secret=client_secret,
+            token_uri="https://oauth2.googleapis.com/token",
+            scopes=SCOPES,
+        )
+        creds.refresh(Request())
+    else:
+        # Fallback to service account
+        from google.oauth2 import service_account
+        creds = service_account.Credentials.from_service_account_file(
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"],
+            scopes=SCOPES,
+        )
+
     return build("drive", "v3", credentials=creds, cache_discovery=False)
 
 
