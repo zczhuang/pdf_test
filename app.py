@@ -49,12 +49,62 @@ def _week_start_date() -> str:
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    google_photos_enabled = bool(os.environ.get("GOOGLE_PHOTOS_REFRESH_TOKEN"))
+    return render_template("index.html", google_photos_enabled=google_photos_enabled)
 
 
 @app.get("/health")
 def health():
     return jsonify({"status": "ok"})
+
+
+@app.post("/google-photos/session")
+def create_google_photos_session():
+    body = request.get_json(silent=True) or {}
+    max_items = int(body.get("max_items", 10))
+
+    try:
+        from services.google_photos_service import create_picker_session
+
+        session = create_picker_session(max_item_count=max_items)
+        return jsonify({"success": True, **session})
+    except Exception as e:
+        app.logger.exception("Google Photos session creation failed")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.post("/google-photos/session/status")
+def google_photos_session_status():
+    body = request.get_json(silent=True) or {}
+    session_id = body.get("session_id")
+    if not session_id:
+        return jsonify({"error": "session_id is required"}), 400
+
+    try:
+        from services.google_photos_service import get_picker_session
+
+        session = get_picker_session(session_id)
+        return jsonify({"success": True, **session})
+    except Exception as e:
+        app.logger.exception("Google Photos session status failed")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.post("/google-photos/session/items")
+def google_photos_session_items():
+    body = request.get_json(silent=True) or {}
+    session_id = body.get("session_id")
+    if not session_id:
+        return jsonify({"error": "session_id is required"}), 400
+
+    try:
+        from services.google_photos_service import list_picked_media_items
+
+        items = list_picked_media_items(session_id)
+        return jsonify({"success": True, "items": items})
+    except Exception as e:
+        app.logger.exception("Google Photos item listing failed")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.post("/transcribe")
@@ -90,8 +140,9 @@ def save_entry():
     Accepts multipart/form-data:
       text        (str)  thoughts/reflection text
       media_urls  (str)  JSON array of URLs (YouTube, Google Photos, any link)
-      audio       (file) optional: save the raw recording to Drive
-      media       (file) optional: attach a photo or video
+      audio               (file) optional: save the raw recording to Drive
+      media               (file) optional: attach a photo or video from device
+      google_photos_items (str)  optional: JSON array of picked Google Photos items
     """
     text = (request.form.get("text") or "").strip()
 
@@ -101,12 +152,20 @@ def save_entry():
     date = _today()
     media_links: list[dict] = []
     media_urls: list[str] = []
+    google_photos_items: list[dict] = []
 
     # Parse media URLs from the form
     raw_media_urls = request.form.get("media_urls", "")
     if raw_media_urls:
         try:
             media_urls = json.loads(raw_media_urls)
+        except json.JSONDecodeError:
+            pass
+
+    raw_google_photos_items = request.form.get("google_photos_items", "")
+    if raw_google_photos_items:
+        try:
+            google_photos_items = json.loads(raw_google_photos_items)
         except json.JSONDecodeError:
             pass
 
@@ -143,6 +202,20 @@ def save_entry():
                 media_links.append({"label": media_file.filename, "url": link["url"]})
             except Exception:
                 app.logger.exception("Media upload failed — skipping")
+
+    # Import Google Photos selections into Drive media storage
+    for item in google_photos_items[:20]:
+        try:
+            from services.drive_service import upload_media
+            from services.google_photos_service import download_picked_media_item
+
+            filename, media_bytes, mime_type = download_picked_media_item(item)
+            drive_link = upload_media(f"{date}-{filename}", media_bytes, mime_type)
+            media_links.append(
+                {"label": f"Google Photos: {filename}", "url": drive_link["url"]}
+            )
+        except Exception:
+            app.logger.exception("Google Photos import failed — skipping item")
 
     # Enrich YouTube URLs
     enriched_urls: list[dict] = []

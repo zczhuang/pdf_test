@@ -198,6 +198,26 @@
     #imagePreview { max-width: 100%; border-radius: 8px; margin-bottom: 12px; display: none; }
     #videoPreview { width: 100%; border-radius: 8px; margin-bottom: 12px; display: none; }
 
+    .google-photos-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 8px;
+      margin-bottom: 8px;
+    }
+    #googlePhotosBtn {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    #googlePhotosBtn:hover { border-color: var(--accent); color: var(--accent); }
+    #googlePhotosBtn:disabled { opacity: .5; cursor: default; }
+    #googlePhotosStatus { font-size: 0.82rem; color: var(--muted); min-height: 18px; }
+
     .hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 14px; }
 
     /* Tags display */
@@ -317,8 +337,22 @@
       </div>
       <button id="addLinkBtn">+ Add another link</button>
 
+      <div class="google-photos-row">
+        <button id="googlePhotosBtn" {% if not google_photos_enabled %}disabled{% endif %}>
+          Choose from Google Photos
+        </button>
+      </div>
+      <div id="googlePhotosStatus">
+        {% if google_photos_enabled %}
+        Pick directly from your Google Photos library.
+        {% else %}
+        Google Photos picker needs one more OAuth setup step.
+        {% endif %}
+      </div>
+      <div id="googlePhotosSelections" class="tags-display"></div>
+
       <label style="margin-top:8px">Upload photo or video</label>
-      <label class="file-label" for="mediaInput">Choose from gallery or Photos...</label>
+      <label class="file-label" for="mediaInput">Choose from device...</label>
       <input type="file" id="mediaInput" accept="image/*,video/*" />
       <img id="imagePreview" alt="preview" />
       <video id="videoPreview" controls playsinline></video>
@@ -337,6 +371,8 @@
 <div id="toast"></div>
 
 <script>
+  const GOOGLE_PHOTOS_ENABLED = {{ "true" if google_photos_enabled else "false" }};
+
   // Date display
   const now = new Date();
   document.getElementById("dateDisplay").textContent =
@@ -367,6 +403,130 @@
   document.querySelector(".remove-link-btn").addEventListener("click", function() {
     this.closest(".media-link-row").querySelector("input").value = "";
   });
+
+  // Google Photos picker
+  let googlePhotosItems = [];
+  let googlePhotosPollTimer = null;
+
+  const googlePhotosBtn = document.getElementById("googlePhotosBtn");
+  const googlePhotosStatus = document.getElementById("googlePhotosStatus");
+  const googlePhotosSelections = document.getElementById("googlePhotosSelections");
+
+  if (googlePhotosBtn) {
+    googlePhotosBtn.addEventListener("click", async () => {
+      if (!GOOGLE_PHOTOS_ENABLED) {
+        showToast("Google Photos picker is not configured yet.", "error");
+        return;
+      }
+
+      googlePhotosBtn.disabled = true;
+      googlePhotosBtn.textContent = "Opening Google Photos...";
+      googlePhotosStatus.textContent = "Waiting for your Google Photos selection...";
+      renderGooglePhotosSelections([]);
+
+      try {
+        const res = await fetch("/google-photos/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ max_items: 10 }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || "Unable to create Google Photos session");
+        }
+
+        const pickerWindow = window.open(
+          `${data.picker_uri}/autoclose`,
+          "_blank",
+          "noopener,noreferrer"
+        );
+
+        if (!pickerWindow) {
+          throw new Error("Popup blocked. Please allow popups and try again.");
+        }
+
+        googlePhotosBtn.textContent = "Waiting for selection...";
+        pollGooglePhotosSession(
+          data.id,
+          data.poll_interval_ms || 3000,
+          Date.now() + (data.timeout_ms || 180000)
+        );
+      } catch (err) {
+        googlePhotosBtn.disabled = false;
+        googlePhotosBtn.textContent = "Choose from Google Photos";
+        googlePhotosStatus.textContent = "Google Photos selection failed.";
+        showToast(err.message || "Google Photos selection failed.", "error");
+      }
+    });
+  }
+
+  function pollGooglePhotosSession(sessionId, pollIntervalMs, deadlineMs) {
+    if (googlePhotosPollTimer) {
+      clearTimeout(googlePhotosPollTimer);
+    }
+
+    const poll = async () => {
+      if (Date.now() > deadlineMs) {
+        googlePhotosBtn.disabled = false;
+        googlePhotosBtn.textContent = "Choose from Google Photos";
+        googlePhotosStatus.textContent = "Google Photos selection timed out.";
+        return;
+      }
+
+      try {
+        const statusRes = await fetch("/google-photos/session/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+        const statusData = await statusRes.json();
+        if (!statusData.success) {
+          throw new Error(statusData.error || "Unable to check Google Photos status");
+        }
+
+        if (statusData.media_items_set) {
+          const itemsRes = await fetch("/google-photos/session/items", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId }),
+          });
+          const itemsData = await itemsRes.json();
+          if (!itemsData.success) {
+            throw new Error(itemsData.error || "Unable to load Google Photos items");
+          }
+
+          googlePhotosItems = itemsData.items || [];
+          renderGooglePhotosSelections(googlePhotosItems);
+          googlePhotosStatus.textContent = `${googlePhotosItems.length} item(s) selected from Google Photos.`;
+          googlePhotosBtn.disabled = false;
+          googlePhotosBtn.textContent = "Choose from Google Photos";
+          return;
+        }
+
+        googlePhotosPollTimer = setTimeout(poll, statusData.poll_interval_ms || pollIntervalMs);
+      } catch (err) {
+        googlePhotosBtn.disabled = false;
+        googlePhotosBtn.textContent = "Choose from Google Photos";
+        googlePhotosStatus.textContent = "Google Photos selection failed.";
+        showToast(err.message || "Google Photos selection failed.", "error");
+      }
+    };
+
+    poll();
+  }
+
+  function renderGooglePhotosSelections(items) {
+    if (!items || items.length === 0) {
+      googlePhotosSelections.innerHTML = "";
+      return;
+    }
+
+    googlePhotosSelections.innerHTML = items.map(item => {
+      const file = item.mediaFile || {};
+      const label = file.filename || item.id || "google-photos-item";
+      return `<span class="tag">${label}</span>`;
+    }).join("");
+  }
 
   // Media preview
   document.getElementById("mediaInput").addEventListener("change", e => {
@@ -494,6 +654,9 @@
 
     const mediaLinks = getMediaLinks();
     if (mediaLinks.length > 0) fd.append("media_urls", JSON.stringify(mediaLinks));
+    if (googlePhotosItems.length > 0) {
+      fd.append("google_photos_items", JSON.stringify(googlePhotosItems));
+    }
 
     const mediaFile = document.getElementById("mediaInput").files[0];
     if (mediaFile) fd.append("media", mediaFile);
@@ -520,6 +683,11 @@
           document.getElementById("imagePreview").removeAttribute("src");
           document.getElementById("videoPreview").style.display = "none";
           document.getElementById("videoPreview").removeAttribute("src");
+          googlePhotosItems = [];
+          renderGooglePhotosSelections([]);
+          googlePhotosStatus.textContent = GOOGLE_PHOTOS_ENABLED
+            ? "Pick directly from your Google Photos library."
+            : "Google Photos picker needs one more OAuth setup step.";
           audioBlob = null;
           playBtn.disabled = true;
           discardBtn.disabled = true;
