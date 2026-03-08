@@ -279,22 +279,53 @@ def get_entry_day(date: str) -> dict | None:
     }
 
 
-def list_entries(since_date: str | None = None) -> list[dict]:
+def list_entries_between(start_date: str, end_date: str | None = None) -> list[dict]:
     """
-    Return a list of journal entries as dicts with keys: date, content, tags.
-    Optionally filter to entries on or after `since_date` (YYYY-MM-DD).
+    Return journal entries between `start_date` and `end_date`, inclusive.
+
+    Dates use YYYY-MM-DD format. If `end_date` is omitted, all entries on or
+    after `start_date` are returned.
     """
+    if end_date and end_date < start_date:
+        return []
+
     service = _get_service()
     files = _list_entry_files(service, order_by="name")
 
     entries = []
     for file_info in files:
         date_str = file_info["name"].replace(".md", "")
-        if since_date and date_str < since_date:
+        if date_str < start_date:
             continue
+        if end_date and date_str > end_date:
+            continue
+
         raw = _download_file(service, file_info["id"])
         entries.append({"date": date_str, "content": raw, "tags": _extract_tags(raw)})
 
+    return entries
+
+
+def list_entries(since_date: str | None = None) -> list[dict]:
+    """
+    Return a list of journal entries as dicts with keys: date, content, tags.
+    Optionally filter to entries on or after `since_date` (YYYY-MM-DD).
+    """
+    if since_date:
+        return list_entries_between(since_date)
+
+    service = _get_service()
+    files = _list_entry_files(service, order_by="name")
+    entries = []
+    for file_info in files:
+        raw = _download_file(service, file_info["id"])
+        entries.append(
+            {
+                "date": file_info["name"].replace(".md", ""),
+                "content": raw,
+                "tags": _extract_tags(raw),
+            }
+        )
     return entries
 
 

@@ -370,6 +370,114 @@
       margin-bottom: 16px;
     }
 
+    .summary-panel {
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      margin-bottom: 20px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(248,243,235,0.9) 100%);
+      border: 1px solid rgba(58,73,114,0.08);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .summary-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    .summary-panel h3 {
+      font-family: "Cormorant Garamond", serif;
+      font-size: 1.8rem;
+      line-height: 0.96;
+      letter-spacing: -0.04em;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .summary-panel p {
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 0.92rem;
+    }
+
+    .summary-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .summary-tab {
+      min-height: 38px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line-strong);
+      background: rgba(255,255,255,0.82);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.84rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform .16s ease, border-color .16s ease, color .16s ease, background .16s ease;
+    }
+
+    .summary-tab:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .summary-tab.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: transparent;
+    }
+
+    .summary-status {
+      min-height: 24px;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 10px;
+    }
+
+    .summary-meta {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      margin-bottom: 14px;
+    }
+
+    .summary-content {
+      color: var(--text);
+      line-height: 1.72;
+      font-size: 0.96rem;
+    }
+
+    .summary-content h4 {
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin: 18px 0 8px;
+    }
+
+    .summary-content p {
+      color: var(--text);
+      font-size: 0.96rem;
+      line-height: 1.72;
+      margin-bottom: 12px;
+    }
+
+    .summary-content ul {
+      margin: 0 0 10px 18px;
+    }
+
+    .summary-content li {
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
     .day-header {
       display: flex;
       justify-content: space-between;
@@ -505,7 +613,8 @@
       }
 
       .hero-top,
-      .day-header {
+      .day-header,
+      .summary-top {
         flex-direction: column;
       }
 
@@ -578,6 +687,24 @@
       </section>
 
       <section class="panel content-panel">
+        <section class="summary-panel">
+          <div class="summary-top">
+            <div>
+              <div class="eyebrow">Highlights</div>
+              <h3>Recent highlights and summary</h3>
+              <p>Switch between a weekly, monthly, or year-to-date view using the selected day as the anchor.</p>
+            </div>
+            <div class="summary-tabs">
+              <button class="summary-tab active" data-period="week" type="button">Week</button>
+              <button class="summary-tab" data-period="month" type="button">Month</button>
+              <button class="summary-tab" data-period="ytd" type="button">Year to date</button>
+            </div>
+          </div>
+          <div class="summary-status" id="summaryStatus">Loading summary...</div>
+          <div class="summary-meta" id="summaryMeta"></div>
+          <div class="summary-content" id="summaryContent"></div>
+        </section>
+
         <div class="status" id="galleryStatus">Loading recent dates...</div>
         <div id="dayView" hidden>
           <div class="day-header">
@@ -595,16 +722,30 @@
   <script>
     let availableDates = [];
     let currentDate = null;
+    let activeSummaryPeriod = "week";
+    const summaryCache = new Map();
 
     const dateStrip = document.getElementById("dateStrip");
     const dateInput = document.getElementById("dateInput");
     const dayView = document.getElementById("dayView");
     const galleryStatus = document.getElementById("galleryStatus");
+    const summaryStatus = document.getElementById("summaryStatus");
+    const summaryMeta = document.getElementById("summaryMeta");
+    const summaryContent = document.getElementById("summaryContent");
     const dayTitle = document.getElementById("dayTitle");
     const dayMeta = document.getElementById("dayMeta");
     const entriesContainer = document.getElementById("entriesContainer");
     const prevBtn = document.getElementById("prevBtn");
     const nextBtn = document.getElementById("nextBtn");
+    const summaryTabs = Array.from(document.querySelectorAll(".summary-tab"));
+
+    summaryTabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        const period = tab.dataset.period;
+        if (!currentDate || !period) return;
+        loadSummary(period, currentDate);
+      });
+    });
 
     document.getElementById("latestBtn").addEventListener("click", () => {
       if (availableDates.length > 0) {
@@ -678,6 +819,7 @@
           throw new Error(data.error || "Unable to load this day.");
         }
         renderDay(data.day);
+        loadSummary(activeSummaryPeriod, dateValue);
       } catch (err) {
         galleryStatus.textContent = err.message || "Unable to load this day.";
       }
@@ -705,6 +847,66 @@
 
       updateNavButtons();
       renderDateStrip();
+    }
+
+    async function loadSummary(period, anchorDate) {
+      activeSummaryPeriod = period;
+      setActiveSummaryTab(period);
+
+      const cacheKey = getSummaryCacheKey(period, anchorDate);
+      if (summaryCache.has(cacheKey)) {
+        renderSummary(summaryCache.get(cacheKey));
+        return;
+      }
+
+      summaryStatus.textContent = "Generating summary...";
+      summaryMeta.textContent = "";
+      summaryContent.innerHTML = "";
+
+      try {
+        const res = await fetch(
+          `/api/gallery/summary?period=${encodeURIComponent(period)}&anchor_date=${encodeURIComponent(anchorDate)}`
+        );
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || "Unable to load the summary.");
+        }
+
+        summaryCache.set(cacheKey, data);
+        renderSummary(data);
+      } catch (err) {
+        summaryStatus.textContent = err.message || "Unable to load the summary.";
+      }
+    }
+
+    function renderSummary(data) {
+      const countLabel = `${data.entries_count} entr${data.entries_count === 1 ? "y" : "ies"}`;
+      summaryStatus.textContent = "";
+      summaryMeta.textContent = `${data.label} - ${countLabel} - ${formatRange(data.start_date, data.end_date)}`;
+      summaryContent.innerHTML = markdownToHtml(data.summary_markdown || "");
+    }
+
+    function setActiveSummaryTab(period) {
+      summaryTabs.forEach(tab => {
+        tab.classList.toggle("active", tab.dataset.period === period);
+      });
+    }
+
+    function getSummaryCacheKey(period, anchorDate) {
+      const anchor = new Date(`${anchorDate}T12:00:00`);
+
+      if (period === "week") {
+        const weekStart = new Date(anchor);
+        const day = (weekStart.getDay() + 6) % 7;
+        weekStart.setDate(weekStart.getDate() - day);
+        return `${period}:${weekStart.toISOString().slice(0, 10)}`;
+      }
+
+      if (period === "month") {
+        return `${period}:${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, "0")}`;
+      }
+
+      return `${period}:${anchorDate}`;
     }
 
     function renderEntry(entry) {
@@ -852,6 +1054,82 @@
         month: "long",
         day: "numeric",
       });
+    }
+
+    function formatRange(startDate, endDate) {
+      const start = new Date(`${startDate}T12:00:00`);
+      const end = new Date(`${endDate}T12:00:00`);
+      const sameYear = start.getFullYear() === end.getFullYear();
+      const startLabel = start.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        ...(sameYear ? {} : { year: "numeric" }),
+      });
+      const endLabel = end.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      return `${startLabel} to ${endLabel}`;
+    }
+
+    function markdownToHtml(markdown) {
+      const lines = (markdown || "").split(/\r?\n/);
+      const html = [];
+      let inList = false;
+      let paragraph = [];
+
+      const flushParagraph = () => {
+        if (paragraph.length === 0) return;
+        html.push(`<p>${escapeHtml(paragraph.join(" "))}</p>`);
+        paragraph = [];
+      };
+
+      const closeList = () => {
+        if (!inList) return;
+        html.push("</ul>");
+        inList = false;
+      };
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+
+        if (!line) {
+          flushParagraph();
+          closeList();
+          continue;
+        }
+
+        if (line.startsWith("## ")) {
+          flushParagraph();
+          closeList();
+          html.push(`<h4>${escapeHtml(line.slice(3))}</h4>`);
+          continue;
+        }
+
+        if (line.startsWith("- ")) {
+          flushParagraph();
+          if (!inList) {
+            html.push("<ul>");
+            inList = true;
+          }
+          html.push(`<li>${escapeHtml(line.slice(2))}</li>`);
+          continue;
+        }
+
+        paragraph.push(line);
+      }
+
+      flushParagraph();
+      closeList();
+      return html.join("");
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
     }
 
     initGallery();

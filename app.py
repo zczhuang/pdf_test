@@ -11,7 +11,7 @@ Routes:
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
@@ -28,10 +28,16 @@ def _today() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+def _today_date() -> date:
+    return datetime.now(timezone.utc).date()
+
+
+def _parse_iso_date(value: str) -> date:
+    return datetime.strptime(value, "%Y-%m-%d").date()
+
+
 def _current_week_label() -> str:
-    now = datetime.now(timezone.utc)
-    week_start = now - __import__("datetime").timedelta(days=now.weekday())
-    return f"Week of {week_start.strftime('%B %-d, %Y')}"
+    return _week_label_for(_today_date())
 
 
 def _current_week_iso() -> str:
@@ -40,9 +46,51 @@ def _current_week_iso() -> str:
 
 
 def _week_start_date() -> str:
-    now = datetime.now(timezone.utc)
-    week_start = now - __import__("datetime").timedelta(days=now.weekday())
-    return week_start.strftime("%Y-%m-%d")
+    return _week_start_for(_today_date()).isoformat()
+
+
+def _week_start_for(anchor_date: date) -> date:
+    return anchor_date - timedelta(days=anchor_date.weekday())
+
+
+def _week_end_for(anchor_date: date) -> date:
+    return _week_start_for(anchor_date) + timedelta(days=6)
+
+
+def _week_label_for(anchor_date: date) -> str:
+    return f"Week of {_week_start_for(anchor_date).strftime('%B %-d, %Y')}"
+
+
+def _month_end_for(anchor_date: date) -> date:
+    if anchor_date.month == 12:
+        return date(anchor_date.year, 12, 31)
+    return date(anchor_date.year, anchor_date.month + 1, 1) - timedelta(days=1)
+
+
+def _period_window(period: str, anchor_date: date) -> dict:
+    today = _today_date()
+
+    if period == "week":
+        start = _week_start_for(anchor_date)
+        end = min(_week_end_for(anchor_date), today)
+        label = _week_label_for(anchor_date)
+    elif period == "month":
+        start = anchor_date.replace(day=1)
+        end = min(_month_end_for(anchor_date), today)
+        label = anchor_date.strftime("%B %Y")
+    elif period == "ytd":
+        start = anchor_date.replace(month=1, day=1)
+        end = min(anchor_date, today)
+        label = f"Year to date through {anchor_date.strftime('%B %-d, %Y')}"
+    else:
+        raise ValueError("Unsupported summary period")
+
+    return {
+        "period": period,
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "label": label,
+    }
 
 
 # ── routes ───────────────────────────────────────────────────────────────────
@@ -93,6 +141,44 @@ def gallery_day(date_value: str):
         return jsonify({"success": True, "day": day})
     except Exception as e:
         app.logger.exception("Gallery day load failed")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.get("/api/gallery/summary")
+def gallery_summary():
+    period = (request.args.get("period") or "week").strip().lower()
+    anchor_value = (request.args.get("anchor_date") or _today()).strip()
+
+    try:
+        anchor_date = _parse_iso_date(anchor_value)
+        window = _period_window(period, anchor_date)
+    except ValueError:
+        return jsonify({"error": "Invalid summary period or date"}), 400
+
+    try:
+        from services.claude_service import generate_period_summary
+        from services.drive_service import list_entries_between
+
+        entries = list_entries_between(
+            start_date=window["start_date"],
+            end_date=window["end_date"],
+        )
+        summary_md = generate_period_summary(entries, window["label"], period)
+
+        return jsonify(
+            {
+                "success": True,
+                "period": period,
+                "anchor_date": anchor_value,
+                "label": window["label"],
+                "start_date": window["start_date"],
+                "end_date": window["end_date"],
+                "entries_count": len(entries),
+                "summary_markdown": summary_md,
+            }
+        )
+    except Exception as e:
+        app.logger.exception("Gallery summary generation failed")
         return jsonify({"error": str(e)}), 500
 
 
