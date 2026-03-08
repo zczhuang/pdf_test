@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Journal Gallery</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f8f6f2;
+      --surface: #ffffff;
+      --border: #e2ddd6;
+      --text: #2d2926;
+      --muted: #7a746c;
+      --accent: #5b6af0;
+      --accent-h: #4455e0;
+      --tag-bg: #eef0fb;
+      --tag-text: #4455e0;
+      --shadow: 0 2px 12px rgba(0,0,0,.06);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 22px 16px 40px;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 880px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 24px;
+    }
+
+    .back-link {
+      display: inline-block;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.92rem;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 1.9rem;
+      letter-spacing: -0.6px;
+      margin-bottom: 6px;
+    }
+
+    header p {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+
+    .controls-top {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .controls-top button,
+    .picker-row button,
+    .chip {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.92rem;
+      cursor: pointer;
+    }
+
+    .controls-top button:hover,
+    .picker-row button:hover,
+    .chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .controls-top button:disabled,
+    .picker-row button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+
+    .picker-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .picker-row input[type="date"] {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      min-height: 42px;
+      font: inherit;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .date-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .chip.active {
+      background: var(--tag-bg);
+      border-color: transparent;
+      color: var(--tag-text);
+    }
+
+    .status {
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .day-header {
+      margin-bottom: 18px;
+    }
+
+    .day-header h2 {
+      font-size: 1.35rem;
+      margin-bottom: 6px;
+    }
+
+    .day-meta {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .day-meta a,
+    .media-footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .entries {
+      display: grid;
+      gap: 16px;
+    }
+
+    .entry-card {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      background: linear-gradient(180deg, #ffffff 0%, #fbfaf7 100%);
+    }
+
+    .entry-top {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .time-pill,
+    .tag {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.78rem;
+    }
+
+    .time-pill {
+      background: #f1efe9;
+      color: var(--muted);
+    }
+
+    .tag {
+      background: var(--tag-bg);
+      color: var(--tag-text);
+    }
+
+    .entry-body {
+      white-space: pre-wrap;
+      line-height: 1.65;
+      font-size: 0.98rem;
+    }
+
+    .media-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .media-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .media-frame {
+      width: 100%;
+      border: 0;
+      background: #ece7df;
+      display: block;
+    }
+
+    .media-image {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      display: block;
+      background: #ece7df;
+    }
+
+    .media-video,
+    .media-audio {
+      width: 100%;
+      display: block;
+      background: #ece7df;
+    }
+
+    .media-footer {
+      padding: 12px;
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+
+    .empty {
+      padding: 24px 0 8px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 18px 12px 32px;
+      }
+
+      .panel {
+        padding: 16px;
+      }
+
+      .controls-top {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .picker-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <a class="back-link" href="/">Back to journal</a>
+      <h1>Journal Gallery</h1>
+      <p>Browse reflections and attached media by date.</p>
+    </header>
+
+    <section class="panel">
+      <div class="controls-top">
+        <button id="latestBtn">Latest</button>
+        <button id="prevBtn" disabled>Previous</button>
+        <button id="nextBtn" disabled>Next</button>
+      </div>
+
+      <div class="picker-row">
+        <input type="date" id="dateInput" />
+        <button id="openDateBtn">Open Date</button>
+      </div>
+
+      <div class="date-strip" id="dateStrip"></div>
+    </section>
+
+    <section class="panel">
+      <div class="status" id="galleryStatus">Loading recent dates...</div>
+      <div id="dayView" hidden>
+        <div class="day-header">
+          <h2 id="dayTitle"></h2>
+          <div class="day-meta" id="dayMeta"></div>
+        </div>
+        <div class="entries" id="entriesContainer"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    let availableDates = [];
+    let currentDate = null;
+
+    const dateStrip = document.getElementById("dateStrip");
+    const dateInput = document.getElementById("dateInput");
+    const dayView = document.getElementById("dayView");
+    const galleryStatus = document.getElementById("galleryStatus");
+    const dayTitle = document.getElementById("dayTitle");
+    const dayMeta = document.getElementById("dayMeta");
+    const entriesContainer = document.getElementById("entriesContainer");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+
+    document.getElementById("latestBtn").addEventListener("click", () => {
+      if (availableDates.length > 0) {
+        loadDay(availableDates[0].date);
+      }
+    });
+
+    document.getElementById("openDateBtn").addEventListener("click", () => {
+      const selectedDate = dateInput.value;
+      if (!selectedDate) {
+        galleryStatus.textContent = "Choose a date first.";
+        return;
+      }
+      loadDay(selectedDate);
+    });
+
+    prevBtn.addEventListener("click", () => stepDate(1));
+    nextBtn.addEventListener("click", () => stepDate(-1));
+
+    async function initGallery() {
+      try {
+        const res = await fetch("/api/gallery/dates?limit=90");
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || "Unable to load dates");
+        }
+
+        availableDates = data.dates || [];
+        renderDateStrip();
+
+        if (availableDates.length === 0) {
+          galleryStatus.textContent = "No journal entries yet.";
+          return;
+        }
+
+        await loadDay(availableDates[0].date);
+      } catch (err) {
+        galleryStatus.textContent = err.message || "Unable to load gallery.";
+      }
+    }
+
+    function renderDateStrip() {
+      dateStrip.innerHTML = "";
+
+      for (const item of availableDates) {
+        const chip = document.createElement("button");
+        chip.className = "chip";
+        chip.textContent = formatShortDate(item.date);
+        chip.dataset.date = item.date;
+        chip.addEventListener("click", () => loadDay(item.date));
+        if (item.date === currentDate) {
+          chip.classList.add("active");
+        }
+        dateStrip.appendChild(chip);
+      }
+    }
+
+    async function loadDay(dateValue) {
+      currentDate = dateValue;
+      dateInput.value = dateValue;
+      galleryStatus.textContent = `Loading ${dateValue}...`;
+      dayView.hidden = true;
+      entriesContainer.innerHTML = "";
+      updateNavButtons();
+      renderDateStrip();
+
+      try {
+        const res = await fetch(`/api/gallery/day/${encodeURIComponent(dateValue)}`);
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || "Unable to load entry day");
+        }
+        renderDay(data.day);
+      } catch (err) {
+        galleryStatus.textContent = err.message || "Unable to load this date.";
+      }
+    }
+
+    function renderDay(day) {
+      galleryStatus.textContent = "";
+      dayView.hidden = false;
+      dayTitle.textContent = formatLongDate(day.date);
+      dayMeta.innerHTML =
+        `${day.entry_count} reflection${day.entry_count === 1 ? "" : "s"} saved on this day` +
+        (day.drive_url
+          ? ` • <a href="${day.drive_url}" target="_blank" rel="noopener noreferrer">Open raw note in Drive</a>`
+          : "");
+
+      if (!day.entries || day.entries.length === 0) {
+        entriesContainer.innerHTML = '<div class="empty">No parsed entries found for this day.</div>';
+        return;
+      }
+
+      entriesContainer.innerHTML = "";
+      for (const entry of day.entries) {
+        entriesContainer.appendChild(renderEntry(entry));
+      }
+
+      updateNavButtons();
+      renderDateStrip();
+    }
+
+    function renderEntry(entry) {
+      const card = document.createElement("article");
+      card.className = "entry-card";
+
+      const top = document.createElement("div");
+      top.className = "entry-top";
+
+      if (entry.time) {
+        const time = document.createElement("span");
+        time.className = "time-pill";
+        time.textContent = entry.time;
+        top.appendChild(time);
+      }
+
+      for (const tagValue of entry.tags || []) {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = tagValue;
+        top.appendChild(tag);
+      }
+
+      if (top.children.length > 0) {
+        card.appendChild(top);
+      }
+
+      const body = document.createElement("div");
+      body.className = "entry-body";
+      body.textContent = entry.text || "";
+      card.appendChild(body);
+
+      if (entry.media && entry.media.length > 0) {
+        const mediaGrid = document.createElement("div");
+        mediaGrid.className = "media-grid";
+        for (const media of entry.media) {
+          mediaGrid.appendChild(renderMedia(media));
+        }
+        card.appendChild(mediaGrid);
+      }
+
+      return card;
+    }
+
+    function renderMedia(media) {
+      const card = document.createElement("article");
+      card.className = "media-card";
+
+      if (media.kind === "image" && media.preview_url) {
+        const link = document.createElement("a");
+        link.href = media.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+
+        const image = document.createElement("img");
+        image.className = "media-image";
+        image.src = media.preview_url;
+        image.alt = media.label;
+        link.appendChild(image);
+        card.appendChild(link);
+      } else if (media.kind === "video") {
+        if (media.preview_url && media.preview_url === media.url) {
+          const video = document.createElement("video");
+          video.className = "media-video";
+          video.src = media.url;
+          video.controls = true;
+          video.playsInline = true;
+          card.appendChild(video);
+        } else if (media.preview_url) {
+          const frame = document.createElement("iframe");
+          frame.className = "media-frame";
+          frame.src = media.preview_url;
+          frame.height = "220";
+          frame.allow = "autoplay";
+          card.appendChild(frame);
+        }
+      } else if (media.kind === "audio") {
+        if (media.preview_url && media.preview_url === media.url) {
+          const audio = document.createElement("audio");
+          audio.className = "media-audio";
+          audio.src = media.url;
+          audio.controls = true;
+          card.appendChild(audio);
+        } else if (media.preview_url) {
+          const frame = document.createElement("iframe");
+          frame.className = "media-frame";
+          frame.src = media.preview_url;
+          frame.height = "120";
+          frame.allow = "autoplay";
+          card.appendChild(frame);
+        }
+      } else if (media.kind === "youtube" && media.preview_url) {
+        const frame = document.createElement("iframe");
+        frame.className = "media-frame";
+        frame.src = media.preview_url;
+        frame.height = "220";
+        frame.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+        frame.allowFullscreen = true;
+        card.appendChild(frame);
+      }
+
+      const footer = document.createElement("div");
+      footer.className = "media-footer";
+
+      const link = document.createElement("a");
+      link.href = media.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = media.label || media.url;
+
+      footer.appendChild(link);
+      card.appendChild(footer);
+      return card;
+    }
+
+    function updateNavButtons() {
+      const currentIndex = availableDates.findIndex(item => item.date === currentDate);
+      prevBtn.disabled = currentIndex === -1 || currentIndex >= availableDates.length - 1;
+      nextBtn.disabled = currentIndex <= 0;
+    }
+
+    function stepDate(direction) {
+      const currentIndex = availableDates.findIndex(item => item.date === currentDate);
+      if (currentIndex === -1) {
+        return;
+      }
+      const nextIndex = currentIndex + direction;
+      if (nextIndex < 0 || nextIndex >= availableDates.length) {
+        return;
+      }
+      loadDay(availableDates[nextIndex].date);
+    }
+
+    function formatShortDate(dateValue) {
+      const date = new Date(`${dateValue}T12:00:00`);
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+    }
+
+    function formatLongDate(dateValue) {
+      const date = new Date(`${dateValue}T12:00:00`);
+      return date.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    }
+
+    initGallery();
+  </script>
+</body>
+</html>

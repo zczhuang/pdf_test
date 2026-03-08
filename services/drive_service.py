@@ -15,8 +15,10 @@ you and count against your 15 GB quota. Set env vars:
 
 import io
 import os
+import re
 from datetime import datetime
 from typing import BinaryIO
+from urllib.parse import parse_qs, urlparse
 
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -31,6 +33,14 @@ SUBFOLDER_SUMMARIES = "summaries"
 SUBFOLDER_WEEKLY = "weekly"
 
 _folder_id_cache: dict[str, str] = {}
+
+_ENTRY_HEADER_RE = re.compile(r"^# Journal [—-] (?P<date>\d{4}-\d{2}-\d{2})$", re.MULTILINE)
+_MARKDOWN_LINK_RE = re.compile(r"^- \[(?P<label>.+?)\]\((?P<url>https?://[^\s)]+)\)$")
+_LABEL_URL_RE = re.compile(r"^- (?P<label>.+): (?P<url>https?://\S+)$")
+
+_IMAGE_EXTENSIONS = {".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp", ".heic"}
+_VIDEO_EXTENSIONS = {".m4v", ".mov", ".mp4", ".mpeg", ".mpg", ".webm"}
+_AUDIO_EXTENSIONS = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".wav"}
 
 
 def _get_service():
@@ -227,34 +237,85 @@ def write_summary(week_label: str, content: str) -> str:
     return f"https://drive.google.com/file/d/{file_id}/view"
 
 
+def list_entry_dates(limit: int | None = None) -> list[dict]:
+    """Return available journal dates in descending order."""
+    service = _get_service()
+    files = _list_entry_files(service, order_by="name desc")
+    dates = []
+
+    for file_info in files:
+        date_str = file_info["name"].replace(".md", "")
+        if not _is_iso_date(date_str):
+            continue
+        dates.append(
+            {
+                "date": date_str,
+                "drive_url": _drive_file_url(file_info["id"]),
+            }
+        )
+        if limit and len(dates) >= limit:
+            break
+
+    return dates
+
+
+def get_entry_day(date: str) -> dict | None:
+    """Return a parsed journal day for gallery rendering."""
+    service = _get_service()
+    entries_folder = _get_entries_folder(service)
+    filename = f"{date}.md"
+    existing = _find_file(service, filename, entries_folder)
+
+    if not existing:
+        return None
+
+    raw = _download_file(service, existing["id"])
+    entries = _parse_entry_document(raw)
+    return {
+        "date": date,
+        "drive_url": _drive_file_url(existing["id"]),
+        "entry_count": len(entries),
+        "entries": entries,
+    }
+
+
 def list_entries(since_date: str | None = None) -> list[dict]:
     """
     Return a list of journal entries as dicts with keys: date, content, tags.
     Optionally filter to entries on or after `since_date` (YYYY-MM-DD).
     """
     service = _get_service()
-    entries_folder = _get_entries_folder(service)
-
-    query = f"'{entries_folder}' in parents and trashed = false and name contains '.md'"
-    results = (
-        service.files()
-        .list(q=query, fields="files(id, name)", orderBy="name", supportsAllDrives=True, includeItemsFromAllDrives=True)
-        .execute()
-    )
-    files = results.get("files", [])
+    files = _list_entry_files(service, order_by="name")
 
     entries = []
-    for f in files:
-        date_str = f["name"].replace(".md", "")
+    for file_info in files:
+        date_str = file_info["name"].replace(".md", "")
         if since_date and date_str < since_date:
             continue
-        raw = _download_file(service, f["id"])
+        raw = _download_file(service, file_info["id"])
         entries.append({"date": date_str, "content": raw, "tags": _extract_tags(raw)})
 
     return entries
 
 
 # ── low-level Drive helpers ──────────────────────────────────────────────────
+
+def _list_entry_files(service, order_by: str) -> list[dict]:
+    entries_folder = _get_entries_folder(service)
+    query = f"'{entries_folder}' in parents and trashed = false and name contains '.md'"
+    results = (
+        service.files()
+        .list(
+            q=query,
+            fields="files(id, name)",
+            orderBy=order_by,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        )
+        .execute()
+    )
+    return results.get("files", [])
+
 
 def _find_file(service, name: str, parent_id: str) -> dict | None:
     query = f"name = '{name}' and '{parent_id}' in parents and trashed = false"
@@ -316,3 +377,184 @@ def _extract_tags(content: str) -> list[str]:
             raw = line.replace("**Tags:**", "").strip()
             return [t.strip() for t in raw.split(",") if t.strip()]
     return []
+
+
+def _is_iso_date(value: str) -> bool:
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return False
+    return True
+
+
+def _drive_file_url(file_id: str) -> str:
+    return f"https://drive.google.com/file/d/{file_id}/view"
+
+
+def _parse_entry_document(content: str) -> list[dict]:
+    matches = list(_ENTRY_HEADER_RE.finditer(content))
+    if not matches:
+        return []
+
+    entries = []
+    for index, match in enumerate(matches):
+        start = match.start()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
+        block = content[start:end].strip()
+        parsed = _parse_entry_block(block)
+        if parsed:
+            entries.append(parsed)
+
+    return entries
+
+
+def _parse_entry_block(block: str) -> dict | None:
+    lines = [line.rstrip() for line in block.splitlines()]
+    if not lines:
+        return None
+
+    match = _ENTRY_HEADER_RE.match(lines[0])
+    if not match:
+        return None
+
+    entry_date = match.group("date")
+    entry_time = ""
+    created_at = ""
+    tags: list[str] = []
+    body_lines: list[str] = []
+    media_lines: list[str] = []
+    in_media_section = False
+
+    for line in lines[1:]:
+        stripped = line.strip()
+
+        if line.startswith("**Time:**"):
+            entry_time = line.replace("**Time:**", "", 1).strip()
+            continue
+        if line.startswith("**Tags:**"):
+            raw_tags = line.replace("**Tags:**", "", 1).strip()
+            tags = [tag.strip() for tag in raw_tags.split(",") if tag.strip()]
+            continue
+        if stripped == "## Media":
+            in_media_section = True
+            continue
+        if line.startswith("*Created:") and line.endswith("*"):
+            created_at = line[1:-1].replace("Created:", "", 1).strip()
+            break
+        if stripped == "---":
+            continue
+
+        if in_media_section:
+            media_lines.append(line)
+        else:
+            body_lines.append(line)
+
+    return {
+        "date": entry_date,
+        "time": entry_time,
+        "created_at": created_at,
+        "tags": tags,
+        "text": "\n".join(body_lines).strip(),
+        "media": _parse_media_lines(media_lines),
+    }
+
+
+def _parse_media_lines(lines: list[str]) -> list[dict]:
+    media_items = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        match = _MARKDOWN_LINK_RE.match(stripped) or _LABEL_URL_RE.match(stripped)
+        if not match:
+            continue
+
+        label = match.group("label").strip()
+        url = match.group("url").strip()
+        media_items.append(_describe_media_item(label, url))
+
+    return media_items
+
+
+def _describe_media_item(label: str, url: str) -> dict:
+    kind = _infer_media_kind(label, url)
+    preview_url = _build_preview_url(url, kind)
+    return {
+        "label": label,
+        "url": url,
+        "kind": kind,
+        "preview_url": preview_url,
+    }
+
+
+def _infer_media_kind(label: str, url: str) -> str:
+    lowered_label = (label or "").lower()
+
+    if "youtube.com" in url or "youtu.be" in url:
+        return "youtube"
+    if lowered_label == "voice recording" or lowered_label.startswith("voice recording"):
+        return "audio"
+
+    candidates = [lowered_label]
+    path = urlparse(url).path.lower()
+    if path:
+        candidates.append(path)
+
+    for candidate in candidates:
+        for extension in _IMAGE_EXTENSIONS:
+            if candidate.endswith(extension):
+                return "image"
+        for extension in _VIDEO_EXTENSIONS:
+            if candidate.endswith(extension):
+                return "video"
+        for extension in _AUDIO_EXTENSIONS:
+            if candidate.endswith(extension):
+                return "audio"
+
+    return "link"
+
+
+def _build_preview_url(url: str, kind: str) -> str | None:
+    if kind == "youtube":
+        video_id = _extract_youtube_id(url)
+        if video_id:
+            return f"https://www.youtube.com/embed/{video_id}"
+        return None
+
+    drive_file_id = _extract_drive_file_id(url)
+    if drive_file_id:
+        if kind == "image":
+            return f"https://drive.google.com/thumbnail?id={drive_file_id}&sz=w1200"
+        return f"https://drive.google.com/file/d/{drive_file_id}/preview"
+
+    if kind in {"image", "video", "audio"}:
+        return url
+
+    return None
+
+
+def _extract_drive_file_id(url: str) -> str | None:
+    match = re.search(r"/file/d/([a-zA-Z0-9_-]+)", url)
+    if match:
+        return match.group(1)
+
+    parsed = urlparse(url)
+    query_id = parse_qs(parsed.query).get("id")
+    if query_id:
+        return query_id[0]
+
+    return None
+
+
+def _extract_youtube_id(url: str) -> str | None:
+    parsed = urlparse(url)
+    if parsed.netloc.endswith("youtu.be"):
+        return parsed.path.strip("/") or None
+    if "youtube.com" in parsed.netloc:
+        video_id = parse_qs(parsed.query).get("v")
+        if video_id:
+            return video_id[0]
+        if parsed.path.startswith("/shorts/"):
+            return parsed.path.split("/shorts/", 1)[1].split("/", 1)[0]
+    return None

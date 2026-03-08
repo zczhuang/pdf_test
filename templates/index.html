@@ -282,6 +282,14 @@
       margin-top: 20px;
       text-align: center;
     }
+    .secondary-link {
+      display: inline-block;
+      margin-top: 12px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .secondary-link:hover { color: var(--accent-h); }
     #summaryBtn {
       background: none;
       border: 1px solid var(--border);
@@ -395,6 +403,9 @@
 <!-- Weekly summary trigger -->
 <div class="summary-row">
   <button id="summaryBtn">Generate this week's summary</button>
+  <div>
+    <a class="secondary-link" href="/gallery">Open gallery by date</a>
+  </div>
 </div>
 
 <div class="summary-card" id="summaryCard">

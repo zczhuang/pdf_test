@@ -53,9 +53,47 @@ def index():
     return render_template("index.html", google_photos_enabled=google_photos_enabled)
 
 
+@app.get("/gallery")
+def gallery():
+    return render_template("gallery.html")
+
+
 @app.get("/health")
 def health():
     return jsonify({"status": "ok"})
+
+
+@app.get("/api/gallery/dates")
+def gallery_dates():
+    limit = request.args.get("limit", default=45, type=int) or 45
+    limit = max(1, min(limit, 365))
+
+    try:
+        from services.drive_service import list_entry_dates
+
+        return jsonify({"success": True, "dates": list_entry_dates(limit=limit)})
+    except Exception as e:
+        app.logger.exception("Gallery date listing failed")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.get("/api/gallery/day/<date_value>")
+def gallery_day(date_value: str):
+    try:
+        datetime.strptime(date_value, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "Invalid date format"}), 400
+
+    try:
+        from services.drive_service import get_entry_day
+
+        day = get_entry_day(date_value)
+        if not day:
+            return jsonify({"error": "Entry not found"}), 404
+        return jsonify({"success": True, "day": day})
+    except Exception as e:
+        app.logger.exception("Gallery day load failed")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.post("/google-photos/session")
