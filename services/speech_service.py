@@ -1,95 +1,52 @@
 """
-Speech-to-text via Google Cloud Speech-to-Text V2.
+Speech-to-text via OpenAI's gpt-4o-mini-transcribe model.
 
-Uses Chirp 3 with auto decoding for browser MediaRecorder audio. If Chirp 3
-returns nothing, falls back to the standard long-form recognizer with explicit
-English and Mandarin language detection.
+The app records browser audio with MediaRecorder and posts it as a blob. OpenAI
+handles automatic language detection well for mixed English and Mandarin notes,
+so the server can send the file through without codec-specific configuration.
 """
 
+import io
 import os
 
-from google.api_core.client_options import ClientOptions
-from google.cloud.speech_v2 import SpeechClient
-from google.cloud.speech_v2.types import cloud_speech
-from google.oauth2 import service_account
-
-_SCOPE = ["https://www.googleapis.com/auth/cloud-platform"]
-_LOCATION = "us"
-_LANGUAGE_FALLBACKS = ["en-US", "cmn-Hans-CN", "cmn-Hant-TW"]
+from openai import OpenAI
 
 
 def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
     """
     Transcribe browser-recorded audio to text.
 
-    The current mobile app posts MediaRecorder blobs, usually WebM/Opus on
-    Android Chrome. V2 auto decoding handles container/codec detection better
-    than the older V1 manual encoding path.
+    The speaker may switch between English and Mandarin Chinese mid-note.
     """
-    _ = mime_type  # V2 auto decoding handles the actual media type.
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured")
 
-    credentials_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if not credentials_path:
-        raise RuntimeError("GOOGLE_APPLICATION_CREDENTIALS is not configured")
+    client = OpenAI(api_key=api_key)
+    audio_file = io.BytesIO(audio_bytes)
+    audio_file.name = _filename_for_mime(mime_type)
 
-    creds = service_account.Credentials.from_service_account_file(
-        credentials_path,
-        scopes=_SCOPE,
-    )
-    project_id = creds.project_id or os.environ.get("GOOGLE_CLOUD_PROJECT")
-    if not project_id:
-        raise RuntimeError("Unable to determine Google Cloud project ID")
-
-    client = SpeechClient(
-        credentials=creds,
-        client_options=ClientOptions(api_endpoint=f"{_LOCATION}-speech.googleapis.com"),
-    )
-
-    transcript = _recognize(
-        client=client,
-        project_id=project_id,
-        audio_bytes=audio_bytes,
-        model="chirp_3",
-        language_codes=["auto"],
-    )
-    if transcript:
-        return transcript
-
-    return _recognize(
-        client=client,
-        project_id=project_id,
-        audio_bytes=audio_bytes,
-        model="long",
-        language_codes=_LANGUAGE_FALLBACKS,
-    )
-
-
-def _recognize(
-    client: SpeechClient,
-    project_id: str,
-    audio_bytes: bytes,
-    model: str,
-    language_codes: list[str],
-) -> str:
-    config = cloud_speech.RecognitionConfig(
-        auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
-        language_codes=language_codes,
-        model=model,
-        features=cloud_speech.RecognitionFeatures(
-            enable_automatic_punctuation=True,
+    transcript = client.audio.transcriptions.create(
+        model="gpt-4o-mini-transcribe",
+        file=audio_file,
+        response_format="text",
+        prompt=(
+            "The speaker may alternate between English and Mandarin Chinese. "
+            "Transcribe naturally, preserve the spoken language, and include "
+            "punctuation."
         ),
     )
+    return transcript.strip()
 
-    request = cloud_speech.RecognizeRequest(
-        recognizer=f"projects/{project_id}/locations/{_LOCATION}/recognizers/_",
-        config=config,
-        content=audio_bytes,
-    )
-    response = client.recognize(request=request)
 
-    parts = [
-        result.alternatives[0].transcript.strip()
-        for result in response.results
-        if result.alternatives and result.alternatives[0].transcript.strip()
-    ]
-    return " ".join(parts).strip()
+def _filename_for_mime(mime_type: str) -> str:
+    mime = (mime_type or "").lower()
+    if "ogg" in mime:
+        return "recording.ogg"
+    if "mp4" in mime or "aac" in mime:
+        return "recording.m4a"
+    if "mpeg" in mime or "mp3" in mime:
+        return "recording.mp3"
+    if "wav" in mime:
+        return "recording.wav"
+    return "recording.webm"

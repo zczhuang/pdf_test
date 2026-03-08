@@ -23,7 +23,7 @@ Voice-first UI → Google Drive storage → Weekly summaries via Claude AI.
 Browser (voice recorder + UI)
     ↓  HTTPS
 Flask on Cloud Run
-    ├── Google Cloud Speech-to-Text  (voice → text)
+    ├── OpenAI gpt-4o-mini-transcribe (voice → text)
     ├── YouTube Data API v3          (link enrichment)
     ├── Google Drive API             (storage)
     └── Claude API (claude-opus-4-6) (weekly summaries)
@@ -52,7 +52,6 @@ Journal/              ← share this folder with your service account
 
 1. Create a GCP project at [console.cloud.google.com](https://console.cloud.google.com)
 2. Enable these APIs:
-   - Cloud Speech-to-Text API
    - Google Drive API
    - YouTube Data API v3 _(optional — for link titles)_
    - Cloud Run API
@@ -85,6 +84,7 @@ Note the service account email (e.g. `journal-sa@your-project.iam.gserviceaccoun
 cp .env.example .env
 # Edit .env and fill in:
 #   ANTHROPIC_API_KEY
+#   OPENAI_API_KEY
 #   GOOGLE_APPLICATION_CREDENTIALS  (path to service-account-key.json)
 #   DRIVE_FOLDER_ID
 #   YOUTUBE_API_KEY                  (optional)
@@ -164,7 +164,7 @@ python -m scheduler.summarize --week-start 2026-03-02
 | Service | Est. monthly cost |
 |---|---|
 | Cloud Run (personal use) | Free tier / ~$0 |
-| Google Cloud Speech-to-Text | ~$0–1 (first 60 min/month free) |
+| OpenAI gpt-4o-mini-transcribe | usage-based |
 | Claude API (claude-opus-4-6) | ~$0.10–0.50/month (weekly summaries) |
 | Google Drive API | Free |
 | YouTube Data API | Free (10K quota units/day) |
