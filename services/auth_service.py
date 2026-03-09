@@ -12,7 +12,7 @@ from google.oauth2 import id_token
 
 GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-GOOGLE_OIDC_SCOPES = ["openid", "email", "profile"]
+GOOGLE_OIDC_SCOPES = ["openid", "email"]
 
 
 def build_google_authorization_url(
