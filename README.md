@@ -22,6 +22,7 @@ Voice-first UI → Google Drive storage → summaries and tagging via Gemini.
 Browser (voice recorder + UI)
     ↓  HTTPS
 Flask on Cloud Run
+    ├── Google OpenID Connect       (browser sign-in + allowlist)
     ├── OpenAI gpt-4o-mini-transcribe (voice → text)
     ├── YouTube Data API v3          (link enrichment)
     ├── Google Drive API             (storage)
@@ -84,11 +85,18 @@ cp .env.example .env
 # Edit .env and fill in:
 #   GEMINI_API_KEY
 #   OPENAI_API_KEY
+#   GOOGLE_OIDC_CLIENT_ID           (Google OAuth Web application client)
+#   GOOGLE_OIDC_CLIENT_SECRET
+#   ALLOWED_GOOGLE_EMAILS
+#   PUBLIC_BASE_URL
 #   GOOGLE_APPLICATION_CREDENTIALS  (path to service-account-key.json)
 #   DRIVE_FOLDER_ID
 #   YOUTUBE_API_KEY                  (optional)
 #   FLASK_SECRET_KEY
 ```
+
+Browser sign-in uses a separate Google OAuth **Web application** client.
+Add `${PUBLIC_BASE_URL}/auth/callback` as an authorized redirect URI.
 
 ### 5. Run Locally
 
@@ -120,7 +128,8 @@ gcloud run deploy journal \
   --platform managed \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars GEMINI_API_KEY=...,DRIVE_FOLDER_ID=...,FLASK_SECRET_KEY=... \
+  --set-env-vars DRIVE_FOLDER_ID=...,FLASK_SECRET_KEY=...,ALLOWED_GOOGLE_EMAILS=...,PUBLIC_BASE_URL=https://YOUR_CLOUD_RUN_URL \
+  --set-secrets GEMINI_API_KEY=journal-gemini-key:latest,OPENAI_API_KEY=journal-openai-key:latest,GOOGLE_OIDC_CLIENT_ID=journal-google-oidc-client-id:latest,GOOGLE_OIDC_CLIENT_SECRET=journal-google-oidc-client-secret:latest \
   --set-secrets GOOGLE_APPLICATION_CREDENTIALS=journal-sa-key:latest
 ```
 

@@ -3,6 +3,8 @@ Journal & Knowledge Management System — Flask backend.
 
 Routes:
   GET  /              → serve the journal UI
+  GET  /login         → Google sign-in screen
+  GET  /auth/callback → Google OAuth callback
   POST /transcribe    → transcribe voice audio, return text
   POST /entry         → save a journal entry to Google Drive (auto-tagged by LLM)
   POST /summarize     → load or generate a weekly summary via Gemini
@@ -11,18 +13,41 @@ Routes:
 
 import json
 import os
+import secrets
+import time
+from collections import defaultdict, deque
 from datetime import date, datetime, timedelta, timezone
+from threading import Lock
+from urllib.parse import urlencode, urlsplit
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
+app.config.update(
+    SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV", "development") != "development",
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 SUMMARY_KIND_WEEKLY_RECAP = "weekly_recap"
 SUMMARY_KIND_PERIOD_REVIEW = "period_review"
+PUBLIC_ENDPOINTS = {"health", "login", "auth_callback", "logout", "static"}
+EXPENSIVE_ROUTE_LIMITS = {
+    "/transcribe": (24, 3600),
+    "/entry": (60, 3600),
+    "/summarize": (24, 3600),
+    "/google-photos/session": (24, 3600),
+    "/google-photos/session/status": (120, 3600),
+    "/google-photos/session/items": (60, 3600),
+}
+_rate_limit_buckets: dict[str, deque[float]] = defaultdict(deque)
+_rate_limit_lock = Lock()
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -102,6 +127,146 @@ def _period_window(period: str, anchor_date: date) -> dict:
         "end_date": end.isoformat(),
         "label": label,
     }
+
+
+def _auth_client_id() -> str:
+    return os.environ.get("GOOGLE_OIDC_CLIENT_ID", "").strip()
+
+
+def _auth_client_secret() -> str:
+    return os.environ.get("GOOGLE_OIDC_CLIENT_SECRET", "").strip()
+
+
+def _allowed_google_emails() -> set[str]:
+    raw = os.environ.get("ALLOWED_GOOGLE_EMAILS", "")
+    normalized = raw.replace("\n", ",").replace(";", ",")
+    return {item.strip().lower() for item in normalized.split(",") if item.strip()}
+
+
+def _auth_ready() -> bool:
+    return bool(_auth_client_id() and _auth_client_secret() and _allowed_google_emails())
+
+
+def _current_user() -> dict | None:
+    user = session.get("user")
+    if not isinstance(user, dict):
+        return None
+
+    email = str(user.get("email", "")).strip().lower()
+    if not email:
+        session.pop("user", None)
+        return None
+
+    if email not in _allowed_google_emails():
+        session.clear()
+        return None
+
+    user["email"] = email
+    return user
+
+
+def _current_user_email() -> str:
+    user = _current_user()
+    return str(user.get("email", "")).strip().lower() if user else ""
+
+
+def _request_target() -> str:
+    query = request.query_string.decode().strip()
+    return f"{request.path}?{query}" if query else request.path
+
+
+def _sanitize_next_target(target: str | None) -> str:
+    if not target:
+        return url_for("index")
+
+    parsed = urlsplit(target)
+    if parsed.scheme or parsed.netloc:
+        return url_for("index")
+
+    if not target.startswith("/") or target.startswith("//"):
+        return url_for("index")
+
+    return target
+
+
+def _public_base_url() -> str:
+    configured = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if configured:
+        return configured
+    return request.host_url.rstrip("/")
+
+
+def _auth_callback_url() -> str:
+    return f"{_public_base_url()}{url_for('auth_callback')}"
+
+
+def _is_api_request() -> bool:
+    return (
+        request.path.startswith("/api/")
+        or request.path.startswith("/google-photos/")
+        or request.path in {"/transcribe", "/entry", "/summarize"}
+    )
+
+
+def _unauthenticated_response():
+    login_url = url_for("login", next=_sanitize_next_target(_request_target()))
+    if _is_api_request() or request.method != "GET":
+        return jsonify({"error": "Authentication required", "login_url": login_url}), 401
+    return redirect(login_url)
+
+
+def _rate_limit_response(limit: int, window_seconds: int):
+    return (
+        jsonify(
+            {
+                "error": "Rate limit exceeded",
+                "limit": limit,
+                "window_seconds": window_seconds,
+            }
+        ),
+        429,
+    )
+
+
+def _apply_rate_limit():
+    config = EXPENSIVE_ROUTE_LIMITS.get(request.path)
+    if not config:
+        return None
+
+    limit, window_seconds = config
+    identity = _current_user_email() or request.headers.get("X-Forwarded-For", request.remote_addr or "unknown")
+    bucket_key = f"{request.path}:{identity}"
+    now = time.time()
+
+    with _rate_limit_lock:
+        bucket = _rate_limit_buckets[bucket_key]
+        while bucket and (now - bucket[0]) >= window_seconds:
+            bucket.popleft()
+
+        if len(bucket) >= limit:
+            app.logger.warning(
+                "rate_limit route=%s email=%s remote_addr=%s",
+                request.path,
+                _current_user_email() or "unknown",
+                request.remote_addr or "unknown",
+            )
+            return _rate_limit_response(limit, window_seconds)
+
+        bucket.append(now)
+
+    return None
+
+
+def _audit_log(action: str, **details) -> None:
+    detail_str = " ".join(f"{key}={value}" for key, value in sorted(details.items()))
+    app.logger.info(
+        "audit action=%s email=%s path=%s remote_addr=%s %s",
+        action,
+        _current_user_email() or "anonymous",
+        request.path,
+        request.remote_addr or "unknown",
+        detail_str,
+    )
 
 
 def _summary_metadata(
@@ -200,7 +365,130 @@ def _resolve_summary(
     }
 
 
+@app.before_request
+def require_login():
+    endpoint = request.endpoint or ""
+    if endpoint in PUBLIC_ENDPOINTS or request.path.startswith("/static/"):
+        return None
+
+    if not _current_user():
+        return _unauthenticated_response()
+
+    return _apply_rate_limit()
+
+
+@app.context_processor
+def auth_template_context():
+    return {
+        "current_user_email": _current_user_email(),
+    }
+
+
 # ── routes ───────────────────────────────────────────────────────────────────
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if _current_user():
+        return redirect(_sanitize_next_target(request.args.get("next")))
+
+    next_path = _sanitize_next_target(
+        request.form.get("next") if request.method == "POST" else request.args.get("next")
+    )
+    error_message = request.args.get("error", "").strip()
+    info_message = "You need to sign in with your Google account to open this journal."
+
+    if request.method == "POST":
+        if not _auth_ready():
+            return (
+                render_template(
+                    "login.html",
+                    next_path=next_path,
+                    login_ready=False,
+                    error_message="Google sign-in is not configured yet.",
+                    info_message=info_message,
+                ),
+                503,
+            )
+
+        from services.auth_service import build_google_authorization_url
+
+        state = secrets.token_urlsafe(24)
+        nonce = secrets.token_urlsafe(24)
+        session["oauth_state"] = state
+        session["oauth_nonce"] = nonce
+        session["post_login_redirect"] = next_path
+
+        auth_url = build_google_authorization_url(
+            client_id=_auth_client_id(),
+            redirect_uri=_auth_callback_url(),
+            state=state,
+            nonce=nonce,
+        )
+        return redirect(auth_url)
+
+    return render_template(
+        "login.html",
+        next_path=next_path,
+        login_ready=_auth_ready(),
+        error_message=error_message,
+        info_message=info_message,
+    )
+
+
+@app.get("/auth/callback")
+def auth_callback():
+    oauth_error = request.args.get("error")
+    if oauth_error:
+        session.pop("oauth_state", None)
+        session.pop("oauth_nonce", None)
+        session.pop("post_login_redirect", None)
+        return redirect(url_for("login", error=f"Google sign-in was cancelled: {oauth_error}"))
+
+    code = request.args.get("code", "").strip()
+    state = request.args.get("state", "").strip()
+
+    expected_state = session.pop("oauth_state", "")
+    expected_nonce = session.pop("oauth_nonce", "")
+    next_path = _sanitize_next_target(session.pop("post_login_redirect", None))
+
+    if not code or not state or state != expected_state:
+        return redirect(url_for("login", error="The Google sign-in session was invalid. Please try again."))
+
+    try:
+        from services.auth_service import exchange_code_for_tokens, verify_google_id_token
+
+        tokens = exchange_code_for_tokens(
+            code=code,
+            client_id=_auth_client_id(),
+            client_secret=_auth_client_secret(),
+            redirect_uri=_auth_callback_url(),
+        )
+        user = verify_google_id_token(tokens["id_token"], _auth_client_id(), expected_nonce)
+    except Exception as exc:
+        app.logger.exception("Google OAuth callback failed")
+        return redirect(url_for("login", error=f"Google sign-in failed: {exc}"))
+
+    email = str(user.get("email", "")).strip().lower()
+    if not user.get("email_verified") or email not in _allowed_google_emails():
+        _audit_log("login_denied", attempted_email=email or "unknown")
+        return redirect(url_for("login", error="This Google account is not allowed to access JournalPal."))
+
+    session["user"] = {
+        "email": email,
+        "name": user.get("name", ""),
+        "picture": user.get("picture", ""),
+    }
+    _audit_log("login_success")
+    return redirect(next_path)
+
+
+@app.get("/logout")
+def logout():
+    email = _current_user_email()
+    session.clear()
+    if email:
+        app.logger.info("audit action=logout email=%s path=/logout", email)
+    return redirect(url_for("login"))
 
 @app.get("/")
 def index():
@@ -274,6 +562,12 @@ def gallery_summary():
             end_date=window["end_date"],
             generator=lambda entries, label: generate_period_summary(entries, label, period),
         )
+        _audit_log(
+            "gallery_summary",
+            period=period,
+            source=result["summary_source"],
+            entries=result["entries_count"],
+        )
 
         return jsonify(
             {
@@ -299,8 +593,9 @@ def create_google_photos_session():
     try:
         from services.google_photos_service import create_picker_session
 
-        session = create_picker_session(max_item_count=max_items)
-        return jsonify({"success": True, **session})
+        picker_session = create_picker_session(max_item_count=max_items)
+        _audit_log("google_photos_session_create", max_items=max_items)
+        return jsonify({"success": True, **picker_session})
     except Exception as e:
         app.logger.exception("Google Photos session creation failed")
         return jsonify({"error": str(e)}), 500
@@ -316,8 +611,9 @@ def google_photos_session_status():
     try:
         from services.google_photos_service import get_picker_session
 
-        session = get_picker_session(session_id)
-        return jsonify({"success": True, **session})
+        picker_session = get_picker_session(session_id)
+        _audit_log("google_photos_session_status")
+        return jsonify({"success": True, **picker_session})
     except Exception as e:
         app.logger.exception("Google Photos session status failed")
         return jsonify({"error": str(e)}), 500
@@ -334,6 +630,7 @@ def google_photos_session_items():
         from services.google_photos_service import list_picked_media_items
 
         items = list_picked_media_items(session_id)
+        _audit_log("google_photos_session_items", item_count=len(items))
         return jsonify({"success": True, "items": items})
     except Exception as e:
         app.logger.exception("Google Photos item listing failed")
@@ -359,6 +656,7 @@ def transcribe():
     try:
         from services.speech_service import transcribe_audio
         text = transcribe_audio(audio_bytes, mime_type)
+        _audit_log("transcribe", audio_bytes=len(audio_bytes))
         return jsonify({"text": text})
     except Exception as e:
         app.logger.exception("Transcription failed")
@@ -479,6 +777,7 @@ def save_entry():
             media_urls=enriched_urls or None,
             media_links=media_links or None,
         )
+        _audit_log("entry_saved", tag_count=len(tags), media_count=len(media_links) + len(enriched_urls))
         return jsonify({"success": True, "drive_url": drive_url, "date": date, "tags": tags})
     except Exception as e:
         app.logger.exception("Entry write failed")
@@ -509,6 +808,12 @@ def summarize():
             start_date=week_window["start_date"],
             end_date=week_window["end_date"],
             generator=lambda entries, label: generate_weekly_summary(entries, label),
+        )
+        _audit_log(
+            "weekly_summary",
+            source=result["summary_source"],
+            entries=result["entries_count"],
+            week=week_iso,
         )
 
         return jsonify({

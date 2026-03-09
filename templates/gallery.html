@@ -160,6 +160,31 @@
       color: var(--accent);
     }
 
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .user-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.62);
+      border: 1px solid rgba(49,70,201,0.08);
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 700;
+      max-width: min(260px, 58vw);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .eyebrow {
       display: inline-flex;
       align-items: center;
@@ -618,6 +643,10 @@
         flex-direction: column;
       }
 
+      .hero-actions {
+        justify-content: flex-start;
+      }
+
       .brand-copy h1 {
         font-size: 2.05rem;
       }
@@ -639,7 +668,13 @@
             <div>Voice, notes, and media that stay with you</div>
           </div>
         </a>
-        <a class="ghost-link" href="/">Back to journal</a>
+        <div class="hero-actions">
+          {% if current_user_email %}
+            <span class="user-pill">{{ current_user_email }}</span>
+          {% endif %}
+          <a class="ghost-link" href="/">Back to journal</a>
+          <a class="ghost-link" href="/logout">Sign out</a>
+        </div>
       </div>
 
       <div class="hero-grid">
