@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#3146c9" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="icon" href="/static/logo-mark.svg" type="image/svg+xml" />
+  <link rel="icon" href="/static/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+  <title>JournalPal sign in</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5eddf;
+      --bg-2: #efe3d2;
+      --surface: rgba(255, 251, 244, 0.9);
+      --text: #24324c;
+      --muted: #647089;
+      --accent: #3146c9;
+      --accent-strong: #2438ab;
+      --line: rgba(58, 73, 114, 0.14);
+      --danger: #b84339;
+      --shadow: 0 24px 50px rgba(39, 50, 82, 0.12);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+    }
+
+    body {
+      font-family: "Manrope", sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.55), transparent 28%),
+        radial-gradient(circle at top right, rgba(49,70,201,0.15), transparent 18%),
+        linear-gradient(180deg, var(--bg-2) 0%, var(--bg) 46%, #f9f4ec 100%);
+      padding: 24px 16px;
+      display: grid;
+      place-items: center;
+    }
+
+    .panel {
+      width: min(100%, 920px);
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+      gap: 24px;
+      padding: 30px;
+      background: var(--surface);
+      backdrop-filter: blur(18px);
+      border-radius: var(--radius-xl);
+      border: 1px solid rgba(255,255,255,0.55);
+      box-shadow: var(--shadow);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 16px;
+      text-decoration: none;
+      color: inherit;
+      margin-bottom: 28px;
+    }
+
+    .brand-mark {
+      width: 62px;
+      height: 62px;
+      border-radius: 18px;
+      box-shadow: 0 18px 34px rgba(49, 70, 201, 0.2);
+      flex: 0 0 auto;
+    }
+
+    .brand-copy h1 {
+      font-family: "Cormorant Garamond", serif;
+      font-size: 2.45rem;
+      line-height: 0.92;
+      letter-spacing: -0.04em;
+      margin-bottom: 4px;
+    }
+
+    .brand-copy h1 span {
+      color: var(--accent);
+    }
+
+    .brand-copy div {
+      color: var(--muted);
+      font-size: 0.92rem;
+      letter-spacing: 0.02em;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 26px;
+      height: 1px;
+      background: currentColor;
+      opacity: 0.45;
+    }
+
+    h2 {
+      font-family: "Cormorant Garamond", serif;
+      font-size: clamp(2.2rem, 5vw, 3.35rem);
+      line-height: 0.96;
+      letter-spacing: -0.045em;
+      margin-bottom: 14px;
+      max-width: 11ch;
+    }
+
+    .lead {
+      color: var(--muted);
+      line-height: 1.75;
+      max-width: 58ch;
+    }
+
+    .notes {
+      display: grid;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .note {
+      padding: 16px 18px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.58);
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .auth-card {
+      padding: 24px;
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(155deg, rgba(36,56,171,0.94) 0%, rgba(49,70,201,0.94) 68%, rgba(221,123,87,0.82) 100%);
+      color: #f7fbff;
+      box-shadow: 0 16px 36px rgba(37, 47, 83, 0.16);
+      display: grid;
+      align-content: start;
+      gap: 16px;
+    }
+
+    .auth-card h3 {
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .auth-card p {
+      color: rgba(247,251,255,0.88);
+      line-height: 1.7;
+      font-size: 0.95rem;
+    }
+
+    .alert {
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.2);
+      line-height: 1.55;
+      font-size: 0.92rem;
+    }
+
+    .alert.error {
+      background: rgba(184,67,57,0.18);
+      border-color: rgba(255,255,255,0.18);
+    }
+
+    .sign-in-form {
+      display: grid;
+      gap: 14px;
+    }
+
+    .primary-button {
+      min-height: 52px;
+      padding: 0 18px;
+      border-radius: 999px;
+      border: none;
+      background: #fffaf2;
+      color: var(--accent-strong);
+      font: inherit;
+      font-weight: 800;
+      font-size: 0.96rem;
+      cursor: pointer;
+      transition: transform .16s ease, box-shadow .16s ease;
+      box-shadow: 0 14px 32px rgba(20, 25, 61, 0.18);
+    }
+
+    .primary-button:hover {
+      transform: translateY(-1px);
+    }
+
+    .primary-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.72;
+      transform: none;
+    }
+
+    .fine-print {
+      font-size: 0.85rem;
+      color: rgba(247,251,255,0.72);
+      line-height: 1.6;
+    }
+
+    @media (max-width: 860px) {
+      .panel {
+        grid-template-columns: 1fr;
+        padding: 22px;
+      }
+
+      h2 {
+        max-width: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <section>
+      <a class="brand" href="/login" aria-label="JournalPal sign in">
+        <img class="brand-mark" src="/static/logo-mark.svg" alt="" />
+        <div class="brand-copy">
+          <h1>Journal<span>Pal</span></h1>
+          <div>Voice, notes, and media that stay with you</div>
+        </div>
+      </a>
+
+      <div class="eyebrow">Private journal</div>
+      <h2>This space only opens for your Google account.</h2>
+      <p class="lead">
+        JournalPal now requires a signed-in session before it will show notes,
+        write to Drive, or use your personal Google Photos and API credentials.
+      </p>
+
+      <div class="notes">
+        <div class="note">Only allowlisted Google accounts can enter.</div>
+        <div class="note">Your journal data, media import, and summary routes stay behind the same login.</div>
+      </div>
+    </section>
+
+    <aside class="auth-card">
+      <h3>Sign in</h3>
+      <p>{{ info_message }}</p>
+
+      {% if error_message %}
+        <div class="alert error">{{ error_message }}</div>
+      {% endif %}
+
+      {% if not login_ready %}
+        <div class="alert">
+          Sign-in is not configured yet. Add the browser OAuth client ID, secret,
+          and allowlisted email before enabling access.
+        </div>
+      {% endif %}
+
+      <form class="sign-in-form" method="post" action="/login">
+        <input type="hidden" name="next" value="{{ next_path }}" />
+        <button class="primary-button" type="submit" {% if not login_ready %}disabled{% endif %}>
+          Continue with Google
+        </button>
+      </form>
+
+      <p class="fine-print">
+        This journal uses Google OpenID Connect for browser sign-in and will only
+        accept the email addresses listed in the server allowlist.
+      </p>
+    </aside>
+  </main>
+</body>
+</html>
